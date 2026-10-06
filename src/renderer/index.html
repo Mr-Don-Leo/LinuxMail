@@ -27,6 +27,7 @@
       <header class="pane-head">
         <span id="mailbox-title">No Mailbox</span>
         <span class="spacer"></span>
+        <input id="msg-search" type="search" placeholder="Search" aria-label="Search messages" disabled>
         <button id="btn-refresh" class="icon-btn" title="Refresh" aria-label="Refresh" disabled>⟳</button>
       </header>
       <div id="message-list" class="scroll">
@@ -35,13 +36,19 @@
         </div>
       </div>
       <footer class="pane-foot">
-        <button id="btn-older" class="btn btn-ghost" disabled>Older</button>
         <span id="page-info"></span>
-        <button id="btn-newer" class="btn btn-ghost" disabled>Newer</button>
       </footer>
     </section>
 
     <section id="reader-pane">
+      <header class="pane-head">
+        <span>Message</span>
+        <span class="spacer"></span>
+        <button id="btn-reply" class="btn" disabled>Reply</button>
+        <button id="btn-forward" class="btn" disabled>Forward</button>
+        <button id="btn-flag" class="btn btn-ghost" disabled>Flag</button>
+        <button id="btn-delete" class="btn btn-danger" disabled>Delete</button>
+      </header>
       <div class="empty-state" id="reader-empty">
         <p>Select a message to read it.</p>
       </div>
@@ -53,12 +60,6 @@
             <div><span class="meta-label">To</span> <span id="msg-to"></span></div>
             <div id="msg-cc-row" hidden><span class="meta-label">Cc</span> <span id="msg-cc"></span></div>
             <div><span class="meta-label">Date</span> <span id="msg-date"></span></div>
-          </div>
-          <div class="msg-actions">
-            <button id="btn-reply" class="btn">Reply</button>
-            <button id="btn-forward" class="btn">Forward</button>
-            <button id="btn-flag" class="btn btn-ghost">Flag</button>
-            <button id="btn-delete" class="btn btn-danger">Delete</button>
           </div>
           <div id="attachment-bar" hidden></div>
         </header>
