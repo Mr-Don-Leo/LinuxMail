@@ -14,6 +14,7 @@ A desktop email client for Linux. Sign in with **any** email account — Gmail, 
 - **Attachments** — view and save received attachments, attach files when composing.
 - **Safe message viewing** — HTML mail is rendered in a fully sandboxed frame with scripts blocked and remote tracking images not loaded.
 - **Secure credential storage** — passwords are encrypted with the system keyring (libsecret/KWallet) via Electron `safeStorage`.
+- **Apple HIG-inspired design** — token-driven theming with automatic light/dark mode and three skins (Apple, Cyberpunk, Windows XP), plus fully custom dropdowns, checkboxes and dialogs so no native WebKit widget ever clashes with the theme.
 
 ## Install
 

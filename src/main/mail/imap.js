@@ -112,6 +112,12 @@ async function fetchMessage(account, credentials, mailbox, uid) {
   });
 }
 
+function addressText(addr) {
+  if (!addr) return '';
+  if (Array.isArray(addr)) return addr.map((a) => a.text).filter(Boolean).join(', ');
+  return addr.text || '';
+}
+
 function serializeParsed(parsed) {
   return {
     subject: parsed.subject || '(no subject)',
