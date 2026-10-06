@@ -32,13 +32,48 @@ async function listMailboxes() {
   return [{ path: 'INBOX', name: 'Inbox', specialUse: '\\Inbox', messages: null, unseen: null }];
 }
 
-async function listMessages(account, credentials, _mailbox, offset = 0, limit = 50) {
+// When searching, headers are fetched for at most this many newest messages.
+const SEARCH_SCAN_LIMIT = 300;
+
+async function headersFor(client, cache, msgNum, uid) {
+  let info = cache.get(uid);
+  if (info) return info;
+  try {
+    const top = await client.TOP(msgNum, 0);
+    const parsed = await simpleParser(top);
+    const from = parsed.from && parsed.from.value && parsed.from.value[0];
+    info = {
+      subject: parsed.subject || '(no subject)',
+      from: from ? { name: from.name || '', address: from.address || '' } : null,
+      date: parsed.date ? parsed.date.toISOString() : null
+    };
+  } catch (err) {
+    info = { subject: '(unable to read headers)', from: null, date: null };
+  }
+  cache.set(uid, info);
+  return info;
+}
+
+function toSummary(uid, msgNum, info) {
+  return {
+    uid,
+    msgNum,
+    subject: info.subject,
+    from: info.from,
+    date: info.date,
+    seen: true, // POP3 has no read state; avoid showing everything as unread
+    flagged: false,
+    answered: false,
+    hasAttachments: false,
+    size: 0
+  };
+}
+
+async function listMessages(account, credentials, _mailbox, offset = 0, limit = 30, query = '') {
   const client = clientFor(account, credentials);
   try {
     const uidl = await client.UIDL(); // [[msgNum, uidl], ...]
-    const total = uidl.length;
-    // Newest messages have the highest message numbers.
-    const slice = uidl.slice().reverse().slice(offset, offset + limit);
+    const newestFirst = uidl.slice().reverse();
 
     let cache = headerCache.get(account.id);
     if (!cache) {
@@ -46,38 +81,26 @@ async function listMessages(account, credentials, _mailbox, offset = 0, limit = 
       headerCache.set(account.id, cache);
     }
 
-    const messages = [];
-    for (const [msgNum, uid] of slice) {
-      let info = cache.get(uid);
-      if (!info) {
-        try {
-          const top = await client.TOP(msgNum, 0);
-          const parsed = await simpleParser(top);
-          const from = parsed.from && parsed.from.value && parsed.from.value[0];
-          info = {
-            subject: parsed.subject || '(no subject)',
-            from: from ? { name: from.name || '', address: from.address || '' } : null,
-            date: parsed.date ? parsed.date.toISOString() : null
-          };
-        } catch (err) {
-          info = { subject: '(unable to read headers)', from: null, date: null };
-        }
-        cache.set(uid, info);
+    if (query) {
+      const q = query.toLowerCase();
+      const matches = [];
+      for (const [msgNum, uid] of newestFirst.slice(0, SEARCH_SCAN_LIMIT)) {
+        const info = await headersFor(client, cache, msgNum, uid);
+        const hay = [
+          info.subject,
+          info.from && info.from.name,
+          info.from && info.from.address
+        ].filter(Boolean).join(' ').toLowerCase();
+        if (hay.includes(q)) matches.push(toSummary(uid, msgNum, info));
       }
-      messages.push({
-        uid,
-        msgNum,
-        subject: info.subject,
-        from: info.from,
-        date: info.date,
-        seen: true, // POP3 has no read state; avoid showing everything as unread
-        flagged: false,
-        answered: false,
-        hasAttachments: false,
-        size: 0
-      });
+      return { total: matches.length, messages: matches.slice(offset, offset + limit) };
     }
-    return { total, messages };
+
+    const messages = [];
+    for (const [msgNum, uid] of newestFirst.slice(offset, offset + limit)) {
+      messages.push(toSummary(uid, msgNum, await headersFor(client, cache, msgNum, uid)));
+    }
+    return { total: uidl.length, messages };
   } finally {
     await client.QUIT().catch(() => {});
   }

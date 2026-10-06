@@ -50,26 +50,38 @@ async function listMailboxes(account, credentials) {
   });
 }
 
-async function listMessages(account, credentials, mailbox, offset = 0, limit = 50) {
+async function listMessages(account, credentials, mailbox, offset = 0, limit = 30, query = '') {
   return withClient(account, credentials, async (client) => {
     const lock = await client.getMailboxLock(mailbox);
     try {
-      const total = client.mailbox.exists;
-      if (!total) return { total: 0, messages: [] };
+      let range;
+      let total;
 
-      // Newest messages have the highest sequence numbers.
-      const end = total - offset;
-      if (end < 1) return { total, messages: [] };
-      const start = Math.max(1, end - limit + 1);
+      if (query) {
+        // Server-side search across headers and body, newest first.
+        const uids = (await client.search({ text: query }, { uid: true })) || [];
+        total = uids.length;
+        const page = uids.reverse().slice(offset, offset + limit);
+        if (!page.length) return { total, messages: [] };
+        range = { set: page.join(','), uid: true };
+      } else {
+        total = client.mailbox.exists;
+        if (!total) return { total: 0, messages: [] };
+        // Newest messages have the highest sequence numbers.
+        const end = total - offset;
+        if (end < 1) return { total, messages: [] };
+        const start = Math.max(1, end - limit + 1);
+        range = { set: `${start}:${end}`, uid: false };
+      }
 
       const messages = [];
-      for await (const msg of client.fetch(`${start}:${end}`, {
+      for await (const msg of client.fetch(range.set, {
         uid: true,
         envelope: true,
         flags: true,
         bodyStructure: true,
         size: true
-      })) {
+      }, { uid: range.uid })) {
         const from = msg.envelope.from && msg.envelope.from[0];
         messages.push({
           uid: msg.uid,
@@ -83,7 +95,7 @@ async function listMessages(account, credentials, mailbox, offset = 0, limit = 5
           size: msg.size || 0
         });
       }
-      messages.reverse(); // newest first
+      messages.sort((a, b) => (b.date || '').localeCompare(a.date || '') || b.uid - a.uid);
       return { total, messages };
     } finally {
       lock.release();

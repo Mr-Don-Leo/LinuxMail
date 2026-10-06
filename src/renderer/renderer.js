@@ -2,7 +2,7 @@
 
 /* global mailApi */
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 30;
 
 const state = {
   accounts: [],
@@ -10,6 +10,8 @@ const state = {
   current: null,          // { accountId, mailbox }
   offset: 0,
   total: 0,
+  query: '',
+  loadingMore: false,
   messages: [],
   selected: null,         // { uid, flagged }
   composeContext: null,   // { inReplyTo, references, quote } when replying
@@ -174,6 +176,9 @@ async function removeAccount(account) {
 async function openMailbox(accountId, mailbox, displayName) {
   state.current = { accountId, mailbox };
   state.offset = 0;
+  state.query = '';
+  $('msg-search').value = '';
+  $('msg-search').disabled = false;
   closeReader();
   $('mailbox-title').textContent = displayName || mailbox;
   $('btn-refresh').disabled = false;
@@ -181,21 +186,25 @@ async function openMailbox(accountId, mailbox, displayName) {
   await loadMessages();
 }
 
-async function loadMessages() {
+async function loadMessages(append = false) {
   if (!state.current) return;
   const listEl = $('message-list');
-  listEl.textContent = '';
-  const loading = document.createElement('div');
-  loading.className = 'empty-state';
-  loading.innerHTML = '<p><span class="spin">⟳</span> Loading messages…</p>';
-  listEl.append(loading);
+  if (!append) {
+    state.offset = 0;
+    listEl.textContent = '';
+    const loading = document.createElement('div');
+    loading.className = 'empty-state';
+    loading.innerHTML = '<p><span class="spin">⟳</span> Loading messages…</p>';
+    listEl.append(loading);
+  }
+  state.loadingMore = true;
 
   try {
     const { total, messages } = await mailApi.listMessages(
-      state.current.accountId, state.current.mailbox, state.offset, PAGE_SIZE
+      state.current.accountId, state.current.mailbox, state.offset, PAGE_SIZE, state.query
     );
     state.total = total;
-    state.messages = messages;
+    state.messages = append ? state.messages.concat(messages) : messages;
     renderMessageList();
     // Refresh sidebar unread counts in the background.
     mailApi.listMailboxes(state.current.accountId)
@@ -207,6 +216,8 @@ async function loadMessages() {
     fail.className = 'empty-state';
     fail.textContent = err.message;
     listEl.append(fail);
+  } finally {
+    state.loadingMore = false;
   }
 }
 
@@ -217,7 +228,7 @@ function renderMessageList() {
   if (!state.messages.length) {
     const empty = document.createElement('div');
     empty.className = 'empty-state';
-    empty.innerHTML = '<p>This folder is empty.</p>';
+    empty.innerHTML = state.query ? '<p>No messages match your search.</p>' : '<p>This folder is empty.</p>';
     listEl.append(empty);
   }
 
@@ -253,19 +264,25 @@ function renderMessageList() {
     listEl.append(row);
   }
 
-  const shownFrom = state.total === 0 ? 0 : state.offset + 1;
-  const shownTo = Math.min(state.offset + PAGE_SIZE, state.total);
-  $('page-info').textContent = state.total ? `${shownFrom}–${shownTo} of ${state.total}` : '';
-  $('btn-newer').disabled = state.offset === 0;
-  $('btn-older').disabled = shownTo >= state.total;
+  $('page-info').textContent = state.total
+    ? `${state.messages.length} of ${state.total}${state.query ? ' matching' : ''}`
+    : '';
 }
 
 /* ---------- reader ---------- */
+
+function setReaderButtons(enabled) {
+  for (const id of ['btn-reply', 'btn-forward', 'btn-flag', 'btn-delete']) {
+    $(id).disabled = !enabled;
+  }
+}
 
 function closeReader() {
   state.selected = null;
   $('reader').hidden = true;
   $('reader-empty').hidden = false;
+  $('reader-empty').textContent = 'Select a message to read it.';
+  setReaderButtons(false);
 }
 
 async function openMessage(msgSummary) {
@@ -314,6 +331,7 @@ async function openMessage(msgSummary) {
     renderBody(msg);
     $('reader-empty').hidden = true;
     $('reader').hidden = false;
+    setReaderButtons(true);
     renderMessageList();
   } catch (err) {
     $('reader-empty').textContent = err.message;
@@ -406,9 +424,31 @@ $('btn-forward').addEventListener('click', () => {
 
 /* ---------- toolbar ---------- */
 
-$('btn-refresh').addEventListener('click', loadMessages);
-$('btn-older').addEventListener('click', () => { state.offset += PAGE_SIZE; loadMessages(); });
-$('btn-newer').addEventListener('click', () => { state.offset = Math.max(0, state.offset - PAGE_SIZE); loadMessages(); });
+$('btn-refresh').addEventListener('click', () => loadMessages());
+
+$('message-list').addEventListener('scroll', () => {
+  const el = $('message-list');
+  if (state.loadingMore || !state.current) return;
+  if (state.messages.length >= state.total) return;
+  if (el.scrollTop + el.clientHeight >= el.scrollHeight - 240) {
+    state.offset = state.messages.length;
+    loadMessages(true);
+  }
+});
+
+$('msg-search').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    state.query = e.target.value.trim();
+    loadMessages();
+  }
+});
+$('msg-search').addEventListener('input', (e) => {
+  if (!e.target.value.trim() && state.query) {
+    state.query = '';
+    loadMessages();
+  }
+});
 
 /* ---------- add-account dialog ---------- */
 
