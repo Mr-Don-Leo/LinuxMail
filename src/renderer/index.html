@@ -1,30 +1,33 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-skin="apple">
 <head>
   <meta charset="utf-8">
   <meta http-equiv="Content-Security-Policy"
         content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-src 'self' data:; font-src 'self'">
   <title>LinuxMail</title>
   <link rel="stylesheet" href="styles.css">
+  <script src="theme.js"></script>
 </head>
 <body>
   <div id="app">
     <aside id="sidebar">
       <div class="sidebar-head">
         <span class="logo">✉ LinuxMail</span>
-        <button id="btn-add-account" class="icon-btn" title="Add account">+</button>
+        <span class="spacer"></span>
+        <button id="btn-settings" class="icon-btn" title="Appearance" aria-label="Appearance">◑</button>
+        <button id="btn-add-account" class="icon-btn" title="Add Account" aria-label="Add Account">+</button>
       </div>
       <nav id="account-list"></nav>
       <div class="sidebar-foot">
-        <button id="btn-compose" class="primary wide" disabled>Compose</button>
+        <button id="btn-compose" class="btn btn-primary wide" disabled>New Message</button>
       </div>
     </aside>
 
     <section id="message-pane">
       <header class="pane-head">
-        <span id="mailbox-title">No mailbox</span>
+        <span id="mailbox-title">No Mailbox</span>
         <span class="spacer"></span>
-        <button id="btn-refresh" class="icon-btn" title="Refresh" disabled>⟳</button>
+        <button id="btn-refresh" class="icon-btn" title="Refresh" aria-label="Refresh" disabled>⟳</button>
       </header>
       <div id="message-list" class="scroll">
         <div class="empty-state" id="list-empty">
@@ -32,9 +35,9 @@
         </div>
       </div>
       <footer class="pane-foot">
-        <button id="btn-older" class="ghost" disabled>Older</button>
+        <button id="btn-older" class="btn btn-ghost" disabled>Older</button>
         <span id="page-info"></span>
-        <button id="btn-newer" class="ghost" disabled>Newer</button>
+        <button id="btn-newer" class="btn btn-ghost" disabled>Newer</button>
       </footer>
     </section>
 
@@ -52,10 +55,10 @@
             <div><span class="meta-label">Date</span> <span id="msg-date"></span></div>
           </div>
           <div class="msg-actions">
-            <button id="btn-reply" class="ghost">Reply</button>
-            <button id="btn-forward" class="ghost">Forward</button>
-            <button id="btn-flag" class="ghost">Star</button>
-            <button id="btn-delete" class="ghost danger">Delete</button>
+            <button id="btn-reply" class="btn">Reply</button>
+            <button id="btn-forward" class="btn">Forward</button>
+            <button id="btn-flag" class="btn btn-ghost">Flag</button>
+            <button id="btn-delete" class="btn btn-danger">Delete</button>
           </div>
           <div id="attachment-bar" hidden></div>
         </header>
@@ -64,37 +67,58 @@
     </section>
   </div>
 
+  <!-- Appearance popover -->
+  <div id="settings-pop" hidden>
+    <div>
+      <div class="pop-label">Appearance</div>
+      <div class="segmented" data-kind="theme">
+        <button type="button" data-value="system">Auto</button>
+        <button type="button" data-value="light">Light</button>
+        <button type="button" data-value="dark">Dark</button>
+      </div>
+    </div>
+    <div>
+      <div class="pop-label">Skin</div>
+      <div class="segmented" data-kind="skin">
+        <button type="button" data-value="apple">Apple</button>
+        <button type="button" data-value="cyberpunk">Cyber</button>
+        <button type="button" data-value="xp">XP</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Add-account dialog -->
   <dialog id="dlg-account">
     <form id="form-account" method="dialog" novalidate>
-      <h2>Sign in to your email</h2>
+      <h2>Sign In to Your Email</h2>
       <p class="hint" id="provider-hint">Enter your address — server settings are detected automatically for common providers.</p>
-      <label>Display name <input id="acc-name" type="text" placeholder="Your Name" autocomplete="off"></label>
-      <label>Email address <input id="acc-email" type="email" required placeholder="you@example.com" autocomplete="off"></label>
+      <label>Display Name <input id="acc-name" type="text" placeholder="Your Name" autocomplete="off"></label>
+      <label>Email Address <input id="acc-email" type="email" required placeholder="you@example.com" autocomplete="off"></label>
       <label>Password <input id="acc-password" type="password" required placeholder="Password or app password" autocomplete="off"></label>
+      <label class="checkbox"><input id="acc-show-pass" type="checkbox"><span class="box"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6.2L4.8 9 10 3.4" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Show password</label>
 
       <details id="acc-advanced">
-        <summary>Server settings</summary>
+        <summary>Server Settings</summary>
         <div class="grid2">
-          <label>Receive with
+          <label>Receive With
             <select id="acc-protocol">
               <option value="imap">IMAP (recommended)</option>
               <option value="pop3">POP3</option>
             </select>
           </label>
-          <label>Username (if different) <input id="acc-login" type="text" placeholder="defaults to email" autocomplete="off"></label>
-          <label>Incoming host <input id="acc-in-host" type="text"></label>
-          <label>Incoming port <input id="acc-in-port" type="number" min="1" max="65535"></label>
-          <label>Incoming security
+          <label>Username (if different) <input id="acc-login" type="text" placeholder="Defaults to email" autocomplete="off"></label>
+          <label>Incoming Host <input id="acc-in-host" type="text"></label>
+          <label>Incoming Port <input id="acc-in-port" type="number" min="1" max="65535"></label>
+          <label>Incoming Security
             <select id="acc-in-sec">
               <option value="ssl">SSL/TLS</option>
               <option value="starttls">STARTTLS</option>
             </select>
           </label>
           <span></span>
-          <label>SMTP host <input id="acc-smtp-host" type="text"></label>
-          <label>SMTP port <input id="acc-smtp-port" type="number" min="1" max="65535"></label>
-          <label>SMTP security
+          <label>SMTP Host <input id="acc-smtp-host" type="text"></label>
+          <label>SMTP Port <input id="acc-smtp-port" type="number" min="1" max="65535"></label>
+          <label>SMTP Security
             <select id="acc-smtp-sec">
               <option value="starttls">STARTTLS</option>
               <option value="ssl">SSL/TLS</option>
@@ -105,8 +129,8 @@
 
       <p class="form-error" id="acc-error" hidden></p>
       <div class="dlg-actions">
-        <button type="button" class="ghost" id="acc-cancel">Cancel</button>
-        <button type="submit" class="primary" id="acc-submit">Sign in</button>
+        <button type="button" class="btn btn-ghost" id="acc-cancel">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="acc-submit">Sign In</button>
       </div>
     </form>
   </dialog>
@@ -114,7 +138,7 @@
   <!-- Compose dialog -->
   <dialog id="dlg-compose">
     <form id="form-compose" method="dialog" novalidate>
-      <h2 id="compose-title">New message</h2>
+      <h2 id="compose-title">New Message</h2>
       <label>From <select id="cmp-from"></select></label>
       <label>To <input id="cmp-to" type="text" required placeholder="recipient@example.com, …"></label>
       <div class="grid2">
@@ -124,18 +148,31 @@
       <label>Subject <input id="cmp-subject" type="text"></label>
       <label class="grow">Message <textarea id="cmp-body" rows="12"></textarea></label>
       <div class="attach-row">
-        <button type="button" class="ghost" id="cmp-attach">Attach files…</button>
+        <button type="button" class="btn btn-ghost" id="cmp-attach">Attach Files…</button>
         <span id="cmp-attach-list"></span>
       </div>
       <p class="form-error" id="cmp-error" hidden></p>
       <div class="dlg-actions">
-        <button type="button" class="ghost" id="cmp-cancel">Discard</button>
-        <button type="submit" class="primary" id="cmp-send">Send</button>
+        <button type="button" class="btn btn-ghost" id="cmp-cancel">Discard</button>
+        <button type="submit" class="btn btn-primary" id="cmp-send">Send</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Confirm dialog (replaces native confirm()) -->
+  <dialog id="dlg-confirm">
+    <form method="dialog">
+      <h2 id="confirm-title">Are You Sure?</h2>
+      <p class="hint" id="confirm-text"></p>
+      <div class="dlg-actions">
+        <button type="button" class="btn btn-ghost" id="confirm-cancel">Cancel</button>
+        <button type="button" class="btn btn-primary" id="confirm-ok">OK</button>
       </div>
     </form>
   </dialog>
 
   <div id="toast" hidden></div>
+  <script src="dropdown.js"></script>
   <script src="renderer.js"></script>
 </body>
 </html>
