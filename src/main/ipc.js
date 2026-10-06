@@ -62,9 +62,11 @@ function registerIpcHandlers() {
     return backendFor(account).listMailboxes(account, store.getCredentials(accountId));
   });
 
-  handle('mail:list', async (_e, accountId, mailbox, offset, limit) => {
+  handle('mail:list', async (_e, accountId, mailbox, offset, limit, query) => {
     const account = store.getAccount(accountId);
-    return backendFor(account).listMessages(account, store.getCredentials(accountId), mailbox, offset, limit);
+    return backendFor(account).listMessages(
+      account, store.getCredentials(accountId), mailbox, offset, limit, String(query || '').trim()
+    );
   });
 
   handle('mail:fetch', async (_e, accountId, mailbox, uid) => {
