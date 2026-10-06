@@ -122,7 +122,7 @@ function renderSidebar() {
         btn.append(icon, name);
         if (box.unseen) {
           const count = document.createElement('span');
-          count.className = 'count';
+          count.className = 'badge';
           count.textContent = box.unseen;
           btn.append(count);
         }
@@ -150,7 +150,12 @@ async function loadMailboxes(accountId) {
 }
 
 async function removeAccount(account) {
-  if (!confirm(`Remove ${account.email} from LinuxMail?\n(No mail is deleted from the server.)`)) return;
+  const ok = await confirmDialog(
+    'Remove Account',
+    `Remove ${account.email} from LinuxMail? No mail is deleted from the server.`,
+    'Remove'
+  );
+  if (!ok) return;
   await mailApi.removeAccount(account.id);
   delete state.mailboxes[account.id];
   if (state.current && state.current.accountId === account.id) {
@@ -283,7 +288,7 @@ async function openMessage(msgSummary) {
     $('msg-cc-row').hidden = !msg.cc;
     $('msg-cc').textContent = msg.cc;
     $('msg-date').textContent = msg.date ? new Date(msg.date).toLocaleString() : '';
-    $('btn-flag').textContent = state.selected.flagged ? 'Unstar' : 'Star';
+    $('btn-flag').textContent = state.selected.flagged ? 'Unflag' : 'Flag';
 
     const attBar = $('attachment-bar');
     attBar.textContent = '';
@@ -353,7 +358,7 @@ $('btn-flag').addEventListener('click', async () => {
     state.selected.flagged = next;
     const row = state.messages.find((m) => m.uid === state.selected.uid);
     if (row) row.flagged = next;
-    $('btn-flag').textContent = next ? 'Unstar' : 'Star';
+    $('btn-flag').textContent = next ? 'Unflag' : 'Flag';
     renderMessageList();
   } catch (err) {
     toast(err.message, true);
@@ -528,6 +533,7 @@ function openCompose(opts = {}) {
     fromSel.append(opt);
   }
   fromSel.value = opts.accountId || (state.current && state.current.accountId) || state.accounts[0].id;
+  window.Dropdown.sync(fromSel);
 
   $('cmp-to').value = opts.to || '';
   $('cmp-subject').value = opts.subject || '';
@@ -592,6 +598,40 @@ $('form-compose').addEventListener('submit', async (event) => {
     btn.disabled = false;
     btn.textContent = 'Send';
   }
+});
+
+/* ---------- confirm dialog ---------- */
+
+function confirmDialog(title, text, okLabel) {
+  return new Promise((resolve) => {
+    const dlg = $('dlg-confirm');
+    $('confirm-title').textContent = title;
+    $('confirm-text').textContent = text;
+    const okBtn = $('confirm-ok');
+    okBtn.textContent = okLabel || 'OK';
+    okBtn.classList.toggle('btn-danger', /remove|delete/i.test(okLabel || ''));
+    okBtn.classList.toggle('btn-primary', !/remove|delete/i.test(okLabel || ''));
+
+    const done = (result) => {
+      dlg.close();
+      okBtn.removeEventListener('click', onOk);
+      $('confirm-cancel').removeEventListener('click', onCancel);
+      dlg.removeEventListener('cancel', onCancel);
+      resolve(result);
+    };
+    const onOk = () => done(true);
+    const onCancel = () => done(false);
+    okBtn.addEventListener('click', onOk);
+    $('confirm-cancel').addEventListener('click', onCancel);
+    dlg.addEventListener('cancel', onCancel);
+    dlg.showModal();
+  });
+}
+
+/* ---------- show password ---------- */
+
+$('acc-show-pass').addEventListener('change', (e) => {
+  $('acc-password').type = e.target.checked ? 'text' : 'password';
 });
 
 /* ---------- boot ---------- */
