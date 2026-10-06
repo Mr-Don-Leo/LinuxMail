@@ -1,0 +1,65 @@
+{
+  "name": "linuxmail",
+  "productName": "LinuxMail",
+  "version": "1.0.0",
+  "description": "A desktop email client for Linux. Sign in with any email account — IMAP, POP3 and SMTP supported.",
+  "main": "src/main/main.js",
+  "author": {
+    "name": "Mr-Don-Leo",
+    "email": "maxb2025@gmail.com"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/Mr-Don-Leo/LinuxMail",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Mr-Don-Leo/LinuxMail.git"
+  },
+  "scripts": {
+    "start": "electron .",
+    "icon": "node tools/make-icon.js",
+    "dist": "electron-builder --linux",
+    "dist:appimage": "electron-builder --linux AppImage",
+    "dist:rpm": "electron-builder --linux rpm"
+  },
+  "dependencies": {
+    "imapflow": "^1.0.164",
+    "mailparser": "^3.7.1",
+    "node-pop3": "^0.9.0",
+    "nodemailer": "^6.9.16"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "io.github.mrdonleo.linuxmail",
+    "productName": "LinuxMail",
+    "artifactName": "${productName}-${version}-${arch}.${ext}",
+    "files": [
+      "src/**/*",
+      "build/icon.png",
+      "package.json"
+    ],
+    "linux": {
+      "target": [
+        "AppImage",
+        "rpm"
+      ],
+      "icon": "build/icon.png",
+      "category": "Network;Email",
+      "synopsis": "Email client with IMAP, POP3 and SMTP support",
+      "desktop": {
+        "entry": {
+          "StartupWMClass": "LinuxMail",
+          "MimeType": "x-scheme-handler/mailto"
+        }
+      }
+    },
+    "rpm": {
+      "fpm": [
+        "--rpm-rpmbuild-define",
+        "_build_id_links none"
+      ]
+    }
+  }
+}

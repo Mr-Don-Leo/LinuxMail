@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-src 'self' data:; font-src 'self'">
+  <title>LinuxMail</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app">
+    <aside id="sidebar">
+      <div class="sidebar-head">
+        <span class="logo">✉ LinuxMail</span>
+        <button id="btn-add-account" class="icon-btn" title="Add account">+</button>
+      </div>
+      <nav id="account-list"></nav>
+      <div class="sidebar-foot">
+        <button id="btn-compose" class="primary wide" disabled>Compose</button>
+      </div>
+    </aside>
+
+    <section id="message-pane">
+      <header class="pane-head">
+        <span id="mailbox-title">No mailbox</span>
+        <span class="spacer"></span>
+        <button id="btn-refresh" class="icon-btn" title="Refresh" disabled>⟳</button>
+      </header>
+      <div id="message-list" class="scroll">
+        <div class="empty-state" id="list-empty">
+          <p>Add an email account to get started.</p>
+        </div>
+      </div>
+      <footer class="pane-foot">
+        <button id="btn-older" class="ghost" disabled>Older</button>
+        <span id="page-info"></span>
+        <button id="btn-newer" class="ghost" disabled>Newer</button>
+      </footer>
+    </section>
+
+    <section id="reader-pane">
+      <div class="empty-state" id="reader-empty">
+        <p>Select a message to read it.</p>
+      </div>
+      <div id="reader" hidden>
+        <header id="reader-head">
+          <h2 id="msg-subject"></h2>
+          <div class="msg-meta">
+            <div><span class="meta-label">From</span> <span id="msg-from"></span></div>
+            <div><span class="meta-label">To</span> <span id="msg-to"></span></div>
+            <div id="msg-cc-row" hidden><span class="meta-label">Cc</span> <span id="msg-cc"></span></div>
+            <div><span class="meta-label">Date</span> <span id="msg-date"></span></div>
+          </div>
+          <div class="msg-actions">
+            <button id="btn-reply" class="ghost">Reply</button>
+            <button id="btn-forward" class="ghost">Forward</button>
+            <button id="btn-flag" class="ghost">Star</button>
+            <button id="btn-delete" class="ghost danger">Delete</button>
+          </div>
+          <div id="attachment-bar" hidden></div>
+        </header>
+        <iframe id="msg-frame" sandbox="" title="Message content"></iframe>
+      </div>
+    </section>
+  </div>
+
+  <!-- Add-account dialog -->
+  <dialog id="dlg-account">
+    <form id="form-account" method="dialog" novalidate>
+      <h2>Sign in to your email</h2>
+      <p class="hint" id="provider-hint">Enter your address — server settings are detected automatically for common providers.</p>
+      <label>Display name <input id="acc-name" type="text" placeholder="Your Name" autocomplete="off"></label>
+      <label>Email address <input id="acc-email" type="email" required placeholder="you@example.com" autocomplete="off"></label>
+      <label>Password <input id="acc-password" type="password" required placeholder="Password or app password" autocomplete="off"></label>
+
+      <details id="acc-advanced">
+        <summary>Server settings</summary>
+        <div class="grid2">
+          <label>Receive with
+            <select id="acc-protocol">
+              <option value="imap">IMAP (recommended)</option>
+              <option value="pop3">POP3</option>
+            </select>
+          </label>
+          <label>Username (if different) <input id="acc-login" type="text" placeholder="defaults to email" autocomplete="off"></label>
+          <label>Incoming host <input id="acc-in-host" type="text"></label>
+          <label>Incoming port <input id="acc-in-port" type="number" min="1" max="65535"></label>
+          <label>Incoming security
+            <select id="acc-in-sec">
+              <option value="ssl">SSL/TLS</option>
+              <option value="starttls">STARTTLS</option>
+            </select>
+          </label>
+          <span></span>
+          <label>SMTP host <input id="acc-smtp-host" type="text"></label>
+          <label>SMTP port <input id="acc-smtp-port" type="number" min="1" max="65535"></label>
+          <label>SMTP security
+            <select id="acc-smtp-sec">
+              <option value="starttls">STARTTLS</option>
+              <option value="ssl">SSL/TLS</option>
+            </select>
+          </label>
+        </div>
+      </details>
+
+      <p class="form-error" id="acc-error" hidden></p>
+      <div class="dlg-actions">
+        <button type="button" class="ghost" id="acc-cancel">Cancel</button>
+        <button type="submit" class="primary" id="acc-submit">Sign in</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Compose dialog -->
+  <dialog id="dlg-compose">
+    <form id="form-compose" method="dialog" novalidate>
+      <h2 id="compose-title">New message</h2>
+      <label>From <select id="cmp-from"></select></label>
+      <label>To <input id="cmp-to" type="text" required placeholder="recipient@example.com, …"></label>
+      <div class="grid2">
+        <label>Cc <input id="cmp-cc" type="text"></label>
+        <label>Bcc <input id="cmp-bcc" type="text"></label>
+      </div>
+      <label>Subject <input id="cmp-subject" type="text"></label>
+      <label class="grow">Message <textarea id="cmp-body" rows="12"></textarea></label>
+      <div class="attach-row">
+        <button type="button" class="ghost" id="cmp-attach">Attach files…</button>
+        <span id="cmp-attach-list"></span>
+      </div>
+      <p class="form-error" id="cmp-error" hidden></p>
+      <div class="dlg-actions">
+        <button type="button" class="ghost" id="cmp-cancel">Discard</button>
+        <button type="submit" class="primary" id="cmp-send">Send</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" hidden></div>
+  <script src="renderer.js"></script>
+</body>
+</html>
