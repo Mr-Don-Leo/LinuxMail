@@ -703,7 +703,11 @@ dialog {
   padding: 22px 24px;
   width: min(560px, 92vw);
   max-height: 92vh;
+  overflow-x: hidden;
 }
+dialog form { min-width: 0; }
+dialog input, dialog select, dialog textarea, dialog .dd { min-width: 0; max-width: 100%; }
+.grid2 > *, .grid4 > *, .contact-add > * { min-width: 0; }
 dialog[open] { animation: modal-in 160ms ease; }
 @keyframes modal-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 dialog::backdrop {
@@ -1101,6 +1105,8 @@ input[type="color"]:focus-visible { outline: none; border-color: var(--accent); 
 #dlg-contacts { width: min(520px, 92vw); }
 
 .contact-add { display: grid; grid-template-columns: 1fr 1.4fr auto; gap: 8px; }
+.contact-add input { width: 100%; }
+.contact-add .btn { white-space: nowrap; }
 .contact-add .btn { display: inline-flex; align-items: center; gap: 6px; }
 
 .contact-list {
