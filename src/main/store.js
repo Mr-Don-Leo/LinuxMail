@@ -8,6 +8,7 @@ const { app, safeStorage } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { buildSignatureText } = require('./signature');
 
 function storeFile() {
   return path.join(app.getPath('userData'), 'accounts.json');
@@ -51,6 +52,11 @@ function decryptSecret(secret) {
 const HEX_COLOR = /^#[0-9a-fA-F]{3,8}$/;
 const TEMPLATE_DEFAULTS = {
   signature: '',
+  sigName: '',
+  sigTitle: '',
+  sigCompany: '',
+  sigPhone: '',
+  sigLogo: '',
   styled: false,
   bg: '#f5f5f7',
   card: '#ffffff',
@@ -63,6 +69,13 @@ function normalizeTemplate(input) {
   const t = { ...TEMPLATE_DEFAULTS };
   if (input && typeof input === 'object') {
     t.signature = String(input.signature || '').slice(0, 2000);
+    for (const key of ['sigName', 'sigTitle', 'sigCompany', 'sigPhone']) {
+      t[key] = String(input[key] || '').slice(0, 200);
+    }
+    const logo = String(input.sigLogo || '');
+    if (/^data:image\/(png|jpeg|gif|webp);base64,[A-Za-z0-9+/=]+$/.test(logo) && logo.length < 600000) {
+      t.sigLogo = logo;
+    }
     t.styled = Boolean(input.styled);
     for (const key of ['bg', 'card', 'text', 'accent']) {
       if (HEX_COLOR.test(String(input[key] || ''))) t[key] = String(input[key]);
@@ -82,6 +95,7 @@ function sanitize(account) {
     incoming: account.incoming,
     smtp: { host: account.smtp.host, port: account.smtp.port, security: account.smtp.security },
     template: normalizeTemplate(account.template),
+    signatureText: buildSignatureText(normalizeTemplate(account.template)),
     passwordStored: Boolean(account.secret)
   };
 }

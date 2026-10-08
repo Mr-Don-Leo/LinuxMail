@@ -6,6 +6,7 @@ const path = require('path');
 const store = require('./store');
 const { detectProvider } = require('./providers');
 const cache = require('./cache');
+const contacts = require('./contacts');
 const imap = require('./mail/imap');
 const pop3 = require('./mail/pop3');
 const smtp = require('./mail/smtp');
@@ -140,6 +141,13 @@ function registerIpcHandlers() {
     cache.removeMessage(accountId, mailbox, uid);
   });
 
+  handle('mail:emptyMailbox', async (_e, accountId, mailbox) => {
+    const account = store.getAccount(accountId);
+    if (account.protocol === 'pop3') throw new Error('Not available for POP3 accounts');
+    await imap.emptyMailbox(account, store.getCredentials(accountId), mailbox);
+    cache.clearMailbox(accountId, mailbox);
+  });
+
   handle('mail:saveAttachment', async (event, accountId, mailbox, uid, index) => {
     const account = store.getAccount(accountId);
     const att = await backendFor(account).fetchAttachment(account, store.getCredentials(accountId), mailbox, uid, index);
@@ -150,6 +158,25 @@ function registerIpcHandlers() {
     if (canceled || !filePath) return { saved: false };
     fs.writeFileSync(filePath, att.content);
     return { saved: true, path: filePath };
+  });
+
+  handle('contacts:list', () => contacts.listContacts());
+  handle('contacts:add', (_e, name, address) => contacts.addContact(name, address));
+  handle('contacts:remove', (_e, address) => contacts.removeContact(address));
+  handle('contacts:suggest', (_e, query) => contacts.suggest(query));
+  handle('contacts:has', (_e, address) => contacts.hasContact(address));
+
+  handle('template:pickLogo', async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    const { canceled, filePaths } = await dialog.showOpenDialog(win, {
+      properties: ['openFile'],
+      filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp'] }]
+    });
+    if (canceled || !filePaths.length) return null;
+    const buf = fs.readFileSync(filePaths[0]);
+    if (buf.length > 300 * 1024) throw new Error('Logo must be smaller than 300 KB.');
+    const ext = path.extname(filePaths[0]).slice(1).toLowerCase().replace('jpg', 'jpeg');
+    return 'data:image/' + ext + ';base64,' + buf.toString('base64');
   });
 
   handle('mail:pickAttachments', async (event) => {
@@ -169,6 +196,11 @@ function registerIpcHandlers() {
     const account = store.getAccount(accountId);
     const credentials = store.getCredentials(accountId);
     const result = await smtp.send(account, credentials, message);
+    contacts.recordRecipients([
+      ...contacts.extractAddresses(message.to),
+      ...contacts.extractAddresses(message.cc),
+      ...contacts.extractAddresses(message.bcc)
+    ]);
     if (account.protocol === 'imap') {
       // Best effort — Gmail saves sent mail itself; others need the append.
       await imap.appendMessage(account, credentials, '\\Sent', result.raw).catch(() => false);

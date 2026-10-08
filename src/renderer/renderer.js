@@ -175,6 +175,12 @@ function renderSidebar() {
           btn.append(count);
         }
         btn.addEventListener('click', () => openMailbox(account.id, box.path, box.name));
+        if (box.specialUse === '\\Trash' && account.protocol === 'imap') {
+          btn.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            openTrashMenu(e, account, box);
+          });
+        }
         block.append(btn);
       }
     }
@@ -402,14 +408,38 @@ async function openMessage(msgSummary) {
   }
 }
 
+function renderAddrList(el, addrs, fallbackText) {
+  el.textContent = '';
+  if (addrs && addrs.length) {
+    addrs.forEach((a) => {
+      const chip = document.createElement('a');
+      chip.className = 'addr-chip';
+      chip.href = '#';
+      chip.textContent = a.name || a.address;
+      chip.title = a.address;
+      chip.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        openAddrPopover(chip, a);
+      });
+      el.append(chip);
+    });
+  } else {
+    el.textContent = fallbackText || '';
+  }
+}
+
 function showMessage(msg, msgSummary) {
   state.selected.msg = msg;
 
+  $('reader-head').classList.add('collapsed');
+  $('head-toggle').title = 'Show details';
+
   $('msg-subject').textContent = msg.subject;
-  $('msg-from').textContent = msg.from;
-  $('msg-to').textContent = msg.to;
-  $('msg-cc-row').hidden = !msg.cc;
-  $('msg-cc').textContent = msg.cc;
+  renderAddrList($('msg-from'), msg.fromAddr, msg.from);
+  renderAddrList($('msg-to'), msg.toAddr, msg.to);
+  $('msg-cc-row').hidden = !(msg.cc || (msg.ccAddr && msg.ccAddr.length));
+  renderAddrList($('msg-cc'), msg.ccAddr, msg.cc);
   $('msg-date').textContent = msg.date ? new Date(msg.date).toLocaleString() : '';
   $('btn-flag').textContent = state.selected.flagged ? 'Unflag' : 'Flag';
 
@@ -682,7 +712,7 @@ function openCompose(opts = {}) {
   $('cmp-to').value = opts.to || '';
   $('cmp-subject').value = opts.subject || '';
   const fromAccount = state.accounts.find((a) => a.id === fromSel.value);
-  const sig = fromAccount && fromAccount.template && fromAccount.template.signature;
+  const sig = fromAccount && fromAccount.signatureText;
   $('cmp-body').value = (sig ? '\n\n-- \n' + sig : '') + (opts.body || '');
   state.composeContext = {
     inReplyTo: opts.inReplyTo || null,
@@ -885,28 +915,110 @@ const TPL_FONT_STACKS = {
   mono: "'SF Mono', Menlo, Consolas, monospace"
 };
 
+let tplLogo = '';
+
+function currentTemplateInput() {
+  return {
+    signature: $('tpl-signature').value,
+    sigName: $('tpl-name').value.trim(),
+    sigTitle: $('tpl-title').value.trim(),
+    sigCompany: $('tpl-company').value.trim(),
+    sigPhone: $('tpl-phone').value.trim(),
+    sigLogo: tplLogo,
+    styled: $('tpl-styled').checked,
+    bg: $('tpl-bg').value,
+    card: $('tpl-card').value,
+    text: $('tpl-text').value,
+    accent: $('tpl-accent').value,
+    font: $('tpl-font').value
+  };
+}
+
 function templatePreview() {
-  const styled = $('tpl-styled').checked;
+  const t = currentTemplateInput();
+  const styled = t.styled;
   const box = $('tpl-preview');
   const card = $('tpl-preview-card');
   const sigEl = $('tpl-preview-sig');
-  box.style.background = styled ? $('tpl-bg').value : 'var(--bg)';
-  card.style.background = styled ? $('tpl-card').value : 'var(--bg-elevated)';
-  card.style.color = styled ? $('tpl-text').value : 'var(--text)';
-  card.style.fontFamily = TPL_FONT_STACKS[$('tpl-font').value] || TPL_FONT_STACKS.sans;
+  box.style.background = styled ? t.bg : 'var(--bg)';
+  card.style.background = styled ? t.card : 'var(--bg-elevated)';
+  card.style.color = styled ? t.text : 'var(--text)';
+  card.style.fontFamily = TPL_FONT_STACKS[t.font] || TPL_FONT_STACKS.sans;
   $('tpl-preview-body').textContent = 'Hi there,\n\nThis is how your emails will look.';
-  const sig = $('tpl-signature').value.trim();
-  sigEl.hidden = !sig;
-  sigEl.textContent = sig;
-  sigEl.style.borderTopColor = styled ? $('tpl-accent').value : 'var(--border)';
+
+  sigEl.textContent = '';
+  const hasSig = t.sigName || t.signature.trim();
+  sigEl.hidden = !hasSig;
+  sigEl.style.borderTopColor = styled ? t.accent : 'var(--border)';
+  if (t.sigName) {
+    if (t.signature.trim()) {
+      const closing = document.createElement('div');
+      closing.className = 'sig-closing';
+      closing.textContent = t.signature.trim();
+      sigEl.append(closing);
+    }
+    const row = document.createElement('div');
+    row.className = 'sig-row';
+    if (tplLogo && styled) {
+      const img = document.createElement('img');
+      img.src = tplLogo;
+      img.className = 'sig-logo';
+      row.append(img);
+    }
+    const details = document.createElement('div');
+    const name = document.createElement('div');
+    name.className = 'sig-name';
+    name.textContent = t.sigName;
+    details.append(name);
+    const role = [t.sigTitle, t.sigCompany].filter(Boolean).join(', ');
+    if (role) {
+      const r = document.createElement('div');
+      r.className = 'sig-role';
+      r.textContent = role;
+      details.append(r);
+    }
+    if (t.sigPhone) {
+      const ph = document.createElement('div');
+      ph.className = 'sig-role';
+      ph.textContent = t.sigPhone;
+      details.append(ph);
+    }
+    row.append(details);
+    sigEl.append(row);
+  } else if (t.signature.trim()) {
+    sigEl.textContent = t.signature.trim();
+  }
   $('tpl-colors').style.opacity = styled ? 1 : 0.45;
 }
+
+function setTplLogo(dataUrl) {
+  tplLogo = dataUrl || '';
+  $('tpl-logo-img').src = tplLogo;
+  $('tpl-logo-img').hidden = !tplLogo;
+  $('tpl-logo-clear').hidden = !tplLogo;
+  templatePreview();
+}
+
+$('tpl-logo-pick').addEventListener('click', async () => {
+  try {
+    const dataUrl = await mailApi.pickLogo();
+    if (dataUrl) setTplLogo(dataUrl);
+  } catch (err) {
+    toast(err.message, true);
+  }
+});
+$('tpl-logo-clear').addEventListener('click', () => setTplLogo(''));
 
 function openTemplateDialog(account) {
   templateAccountId = account.id;
   const t = account.template || {};
   $('tpl-account-label').textContent = 'For ' + account.email;
   $('tpl-signature').value = t.signature || '';
+  $('tpl-name').value = t.sigName || '';
+  $('tpl-title').value = t.sigTitle || '';
+  $('tpl-company').value = t.sigCompany || '';
+  $('tpl-phone').value = t.sigPhone || '';
+  setTplLogo(t.sigLogo || '');
   $('tpl-styled').checked = Boolean(t.styled);
   $('tpl-bg').value = t.bg || '#f5f5f7';
   $('tpl-card').value = t.card || '#ffffff';
@@ -918,7 +1030,7 @@ function openTemplateDialog(account) {
   dlgTemplate.showModal();
 }
 
-for (const id of ['tpl-signature', 'tpl-styled', 'tpl-bg', 'tpl-card', 'tpl-text', 'tpl-accent', 'tpl-font']) {
+for (const id of ['tpl-signature', 'tpl-name', 'tpl-title', 'tpl-company', 'tpl-phone', 'tpl-styled', 'tpl-bg', 'tpl-card', 'tpl-text', 'tpl-accent', 'tpl-font']) {
   $(id).addEventListener('input', templatePreview);
   $(id).addEventListener('change', templatePreview);
 }
@@ -928,20 +1040,271 @@ $('tpl-cancel').addEventListener('click', () => dlgTemplate.close());
 $('form-template').addEventListener('submit', async (event) => {
   event.preventDefault();
   try {
-    await mailApi.updateAccount(templateAccountId, {
-      template: {
-        signature: $('tpl-signature').value,
-        styled: $('tpl-styled').checked,
-        bg: $('tpl-bg').value,
-        card: $('tpl-card').value,
-        text: $('tpl-text').value,
-        accent: $('tpl-accent').value,
-        font: $('tpl-font').value
-      }
-    });
+    await mailApi.updateAccount(templateAccountId, { template: currentTemplateInput() });
     dlgTemplate.close();
     toast('Template saved');
     await refreshAccounts();
+  } catch (err) {
+    toast(err.message, true);
+  }
+});
+
+/* ---------- trash context menu ---------- */
+
+function openTrashMenu(event, account, box) {
+  const pop = $('addr-pop'); // reused generic popover panel
+  pop.textContent = '';
+  const row = document.createElement('div');
+  row.className = 'dd-option';
+  row.textContent = 'Delete All Items';
+  row.addEventListener('click', async () => {
+    pop.hidden = true;
+    const ok = await confirmDialog(
+      'Empty ' + box.name,
+      'Are you sure you want to clear all your Deleted Items? This is permanent.',
+      'Delete All'
+    );
+    if (!ok) return;
+    try {
+      await mailApi.emptyMailbox(account.id, box.path);
+      toast(box.name + ' emptied');
+      if (state.current && state.current.accountId === account.id && state.current.mailbox === box.path) {
+        closeReader();
+        await loadMessages();
+      }
+      mailApi.listMailboxes(account.id)
+        .then((boxes) => { state.mailboxes[account.id] = boxes; renderSidebar(); })
+        .catch(() => {});
+    } catch (err) {
+      toast(err.message, true);
+    }
+  });
+  pop.append(row);
+  pop.hidden = false;
+  const popRect = pop.getBoundingClientRect();
+  pop.style.left = Math.min(event.clientX, window.innerWidth - popRect.width - 8) + 'px';
+  pop.style.top = Math.min(event.clientY, window.innerHeight - popRect.height - 8) + 'px';
+}
+
+/* ---------- collapsible reader head ---------- */
+
+$('head-toggle').addEventListener('click', () => {
+  const head = $('reader-head');
+  const collapsed = head.classList.toggle('collapsed');
+  $('head-toggle').title = collapsed ? 'Show details' : 'Hide details';
+});
+
+/* ---------- address popover (email / add to contacts) ---------- */
+
+async function openAddrPopover(anchor, addr) {
+  const pop = $('addr-pop');
+  pop.textContent = '';
+
+  const header = document.createElement('div');
+  header.className = 'addr-pop-head';
+  header.textContent = addr.address;
+  pop.append(header);
+
+  const emailRow = document.createElement('div');
+  emailRow.className = 'dd-option';
+  emailRow.textContent = 'Send Email';
+  emailRow.addEventListener('click', () => {
+    pop.hidden = true;
+    openCompose({ to: addr.address, title: 'New Message' });
+  });
+  pop.append(emailRow);
+
+  const known = await mailApi.hasContact(addr.address).catch(() => false);
+  const addRow = document.createElement('div');
+  addRow.className = 'dd-option';
+  if (known) {
+    addRow.textContent = 'In Contacts';
+    addRow.classList.add('disabled');
+  } else {
+    addRow.textContent = 'Add to Contacts';
+    addRow.addEventListener('click', async () => {
+      pop.hidden = true;
+      try {
+        await mailApi.addContact(addr.name || '', addr.address);
+        toast('Added ' + (addr.name || addr.address) + ' to contacts');
+      } catch (err) {
+        toast(err.message, true);
+      }
+    });
+  }
+  pop.append(addRow);
+
+  const rect = anchor.getBoundingClientRect();
+  pop.hidden = false;
+  const popRect = pop.getBoundingClientRect();
+  pop.style.left = Math.min(rect.left, window.innerWidth - popRect.width - 8) + 'px';
+  pop.style.top = Math.min(rect.bottom + 4, window.innerHeight - popRect.height - 8) + 'px';
+}
+
+document.addEventListener('pointerdown', (e) => {
+  const pop = $('addr-pop');
+  if (!pop.hidden && !pop.contains(e.target)) pop.hidden = true;
+});
+
+/* ---------- recipient autocomplete ---------- */
+
+const suggestState = { input: null, items: [], index: -1 };
+
+function hideSuggest() {
+  $('suggest-pop').hidden = true;
+  suggestState.input = null;
+  suggestState.items = [];
+  suggestState.index = -1;
+}
+
+function applySuggestion(item) {
+  const input = suggestState.input;
+  if (!input) return;
+  const parts = input.value.split(',');
+  parts[parts.length - 1] = ' ' + (item.name ? `${item.name} <${item.address}>` : item.address);
+  input.value = parts.join(',').replace(/^ /, '') + ', ';
+  hideSuggest();
+  input.focus();
+}
+
+function renderSuggest() {
+  const pop = $('suggest-pop');
+  pop.textContent = '';
+  suggestState.items.forEach((item, i) => {
+    const row = document.createElement('div');
+    row.className = 'dd-option' + (i === suggestState.index ? ' focused' : '');
+    const label = document.createElement('span');
+    label.className = 'sug-label';
+    label.innerHTML = (item.isContact ? Icons.svg('users', 11) + ' ' : '') +
+      (item.name ? escapeHtml(item.name) + ' <span class="sug-addr">' + escapeHtml(item.address) + '</span>'
+                 : escapeHtml(item.address));
+    row.append(label);
+    row.addEventListener('mousedown', (e) => { e.preventDefault(); applySuggestion(item); });
+    pop.append(row);
+  });
+  pop.hidden = suggestState.items.length === 0;
+  if (!pop.hidden && suggestState.input) {
+    const rect = suggestState.input.getBoundingClientRect();
+    pop.style.left = rect.left + 'px';
+    pop.style.top = rect.bottom + 4 + 'px';
+    pop.style.width = rect.width + 'px';
+  }
+}
+
+let suggestTimer = null;
+
+function attachAutocomplete(input) {
+  input.addEventListener('input', () => {
+    const lastPart = input.value.split(',').pop().trim();
+    clearTimeout(suggestTimer);
+    if (!lastPart) { hideSuggest(); return; }
+    suggestTimer = setTimeout(async () => {
+      try {
+        const items = await mailApi.suggestRecipients(lastPart);
+        suggestState.input = input;
+        suggestState.items = items.filter((it) => !input.value.toLowerCase().includes(it.address));
+        suggestState.index = suggestState.items.length ? 0 : -1;
+        renderSuggest();
+      } catch (_) { hideSuggest(); }
+    }, 150);
+  });
+  input.addEventListener('keydown', (e) => {
+    if ($('suggest-pop').hidden || suggestState.input !== input) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      suggestState.index = Math.min(suggestState.items.length - 1, suggestState.index + 1);
+      renderSuggest();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      suggestState.index = Math.max(0, suggestState.index - 1);
+      renderSuggest();
+    } else if (e.key === 'Enter' || e.key === 'Tab') {
+      if (suggestState.index >= 0) {
+        e.preventDefault();
+        applySuggestion(suggestState.items[suggestState.index]);
+      }
+    } else if (e.key === 'Escape') {
+      e.stopPropagation();
+      hideSuggest();
+    }
+  });
+  input.addEventListener('blur', () => setTimeout(hideSuggest, 150));
+}
+
+['cmp-to', 'cmp-cc', 'cmp-bcc'].forEach((id) => attachAutocomplete($(id)));
+
+/* ---------- contacts dialog ---------- */
+
+const dlgContacts = $('dlg-contacts');
+let contactsCache = [];
+
+function renderContacts() {
+  const listEl = $('contact-list');
+  const q = $('ct-search').value.trim().toLowerCase();
+  listEl.textContent = '';
+  const visible = contactsCache.filter((c) =>
+    !q || c.address.includes(q) || (c.name && c.name.toLowerCase().includes(q)));
+  if (!visible.length) {
+    const empty = document.createElement('div');
+    empty.className = 'empty-state';
+    empty.textContent = contactsCache.length ? 'No contacts match your search.' : 'No contacts yet — add one above, or use “Add to Contacts” on any sender.';
+    listEl.append(empty);
+    return;
+  }
+  for (const c of visible) {
+    const row = document.createElement('div');
+    row.className = 'contact-row';
+    const info = document.createElement('div');
+    info.className = 'contact-info';
+    const name = document.createElement('div');
+    name.className = 'contact-name';
+    name.textContent = c.name || c.address;
+    info.append(name);
+    if (c.name) {
+      const mail = document.createElement('div');
+      mail.className = 'contact-mail';
+      mail.textContent = c.address;
+      info.append(mail);
+    }
+    const compose = document.createElement('button');
+    compose.type = 'button';
+    compose.className = 'icon-btn';
+    compose.title = 'Send Email';
+    compose.innerHTML = Icons.svg('send', 13);
+    compose.addEventListener('click', () => {
+      dlgContacts.close();
+      openCompose({ to: c.address });
+    });
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'icon-btn';
+    remove.title = 'Remove';
+    remove.innerHTML = Icons.svg('x', 13);
+    remove.addEventListener('click', async () => {
+      contactsCache = await mailApi.removeContact(c.address);
+      renderContacts();
+    });
+    row.append(info, compose, remove);
+    listEl.append(row);
+  }
+}
+
+$('btn-contacts').addEventListener('click', async () => {
+  contactsCache = await mailApi.listContacts().catch(() => []);
+  $('ct-search').value = '';
+  $('ct-name').value = '';
+  $('ct-email').value = '';
+  renderContacts();
+  dlgContacts.showModal();
+});
+$('ct-close').addEventListener('click', () => dlgContacts.close());
+$('ct-search').addEventListener('input', renderContacts);
+$('ct-add').addEventListener('click', async () => {
+  try {
+    contactsCache = await mailApi.addContact($('ct-name').value, $('ct-email').value);
+    $('ct-name').value = '';
+    $('ct-email').value = '';
+    renderContacts();
   } catch (err) {
     toast(err.message, true);
   }
