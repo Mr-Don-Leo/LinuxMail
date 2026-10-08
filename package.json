@@ -1,7 +1,7 @@
 {
   "name": "linuxmail",
   "productName": "LinuxMail",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "A desktop email client for Linux. Sign in with any email account — IMAP, POP3 and SMTP supported.",
   "main": "src/main/main.js",
   "author": {
@@ -58,7 +58,9 @@
     "rpm": {
       "fpm": [
         "--rpm-rpmbuild-define",
-        "_build_id_links none"
+        "_build_id_links none",
+        "--rpm-digest",
+        "sha256"
       ]
     }
   }
