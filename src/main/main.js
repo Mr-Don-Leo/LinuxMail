@@ -3,6 +3,7 @@
 const { app, BrowserWindow, Menu, shell } = require('electron');
 const path = require('path');
 const { registerIpcHandlers } = require('./ipc');
+const { closePool } = require('./mail/imap');
 
 let mainWindow = null;
 
@@ -98,5 +99,14 @@ if (!gotLock) {
 
   app.on('window-all-closed', () => {
     app.quit();
+  });
+
+  app.on('will-quit', (event) => {
+    event.preventDefault();
+    // Don't let a hung server block quitting.
+    Promise.race([
+      closePool(),
+      new Promise((resolve) => setTimeout(resolve, 2000))
+    ]).finally(() => app.exit(0));
   });
 }

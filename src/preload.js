@@ -16,6 +16,9 @@ contextBridge.exposeInMainWorld('mailApi', {
   removeAccount: (id) => call('accounts:remove', id),
 
   listMailboxes: (accountId) => call('mail:mailboxes', accountId),
+  cachedMailboxes: (accountId) => call('mail:cachedMailboxes', accountId),
+  cachedList: (accountId, mailbox) => call('mail:cachedList', accountId, mailbox),
+  cachedBody: (accountId, mailbox, uid) => call('mail:cachedBody', accountId, mailbox, uid),
   listMessages: (accountId, mailbox, offset, limit, query) => call('mail:list', accountId, mailbox, offset, limit, query),
   fetchMessage: (accountId, mailbox, uid) => call('mail:fetch', accountId, mailbox, uid),
   setFlag: (accountId, mailbox, uid, flag, value) => call('mail:flag', accountId, mailbox, uid, flag, value),
