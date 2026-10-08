@@ -385,8 +385,9 @@ async function openMessage(msgSummary) {
 
   // A cached body is immutable: render it and skip the network entirely,
   // just telling the server to mark the message read.
-  const cached = await mailApi.cachedBody(accountId, mailbox, msgSummary.uid).catch(() => null);
+  let cached = await mailApi.cachedBody(accountId, mailbox, msgSummary.uid).catch(() => null);
   if (token !== state.openToken) return;
+  if (cached && cached.fromAddr === undefined) cached = null; // pre-1.4.0 cache format
   if (cached) {
     if (!msgSummary.seen) {
       msgSummary.seen = true;
@@ -408,8 +409,42 @@ async function openMessage(msgSummary) {
   }
 }
 
+// Parses raw header text like "'Kirby Vail'" <kvail@noon.com>, x@y.z
+// so names become clickable even for messages cached before structured
+// addresses existed (or any path that only has the text form).
+function parseAddressText(text) {
+  const parts = [];
+  let cur = '';
+  let inQuote = false;
+  let inAngle = false;
+  for (const ch of String(text || '')) {
+    if (ch === '"') inQuote = !inQuote;
+    else if (ch === '<' && !inQuote) inAngle = true;
+    else if (ch === '>' && !inQuote) inAngle = false;
+    if (ch === ',' && !inQuote && !inAngle) {
+      parts.push(cur);
+      cur = '';
+    } else {
+      cur += ch;
+    }
+  }
+  if (cur.trim()) parts.push(cur);
+  return parts.map((part) => {
+    const m = /^(.*)<([^>]+)>\s*$/.exec(part.trim());
+    if (m) {
+      return {
+        name: m[1].replace(/^['"\s]+|['"\s]+$/g, '').replace(/['"]+/g, ''),
+        address: m[2].trim()
+      };
+    }
+    const addr = part.trim();
+    return addr && addr.includes('@') ? { name: '', address: addr } : null;
+  }).filter(Boolean);
+}
+
 function renderAddrList(el, addrs, fallbackText) {
   el.textContent = '';
+  if (!addrs || !addrs.length) addrs = parseAddressText(fallbackText);
   if (addrs && addrs.length) {
     addrs.forEach((a) => {
       const chip = document.createElement('a');
