@@ -1,6 +1,6 @@
 'use strict';
 
-const { ipcMain, dialog, BrowserWindow } = require('electron');
+const { ipcMain, dialog, BrowserWindow, app, shell } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const store = require('./store');
@@ -36,6 +36,39 @@ function handle(channel, fn) {
 }
 
 function registerIpcHandlers() {
+  handle('window:control', (event, action) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win) return false;
+    switch (action) {
+      case 'minimize': win.minimize(); break;
+      case 'maximize': win.isMaximized() ? win.unmaximize() : win.maximize(); break;
+      case 'close': win.close(); break;
+      case 'isMaximized': return win.isMaximized();
+    }
+    return win.isMaximized();
+  });
+
+  handle('app:action', (event, action) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    const wc = win && win.webContents;
+    switch (action) {
+      case 'quit': app.quit(); break;
+      case 'reload': if (wc) wc.reload(); break;
+      case 'devtools': if (wc) wc.toggleDevTools(); break;
+      case 'zoom-in': if (wc) wc.setZoomLevel(Math.min(wc.getZoomLevel() + 0.5, 5)); break;
+      case 'zoom-out': if (wc) wc.setZoomLevel(Math.max(wc.getZoomLevel() - 0.5, -5)); break;
+      case 'zoom-reset': if (wc) wc.setZoomLevel(0); break;
+      case 'fullscreen': if (win) win.setFullScreen(!win.isFullScreen()); break;
+      case 'undo': if (wc) wc.undo(); break;
+      case 'redo': if (wc) wc.redo(); break;
+      case 'cut': if (wc) wc.cut(); break;
+      case 'copy': if (wc) wc.copy(); break;
+      case 'paste': if (wc) wc.paste(); break;
+      case 'select-all': if (wc) wc.selectAll(); break;
+      case 'github': shell.openExternal('https://github.com/Mr-Don-Leo/LinuxMail'); break;
+    }
+  });
+
   handle('accounts:list', () => store.listAccounts());
   handle('accounts:detect', (_e, email) => detectProvider(email));
 

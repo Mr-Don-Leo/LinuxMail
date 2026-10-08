@@ -25,5 +25,9 @@ contextBridge.exposeInMainWorld('mailApi', {
   deleteMessage: (accountId, mailbox, uid) => call('mail:delete', accountId, mailbox, uid),
   saveAttachment: (accountId, mailbox, uid, index) => call('mail:saveAttachment', accountId, mailbox, uid, index),
   pickAttachments: () => call('mail:pickAttachments'),
-  sendMessage: (accountId, message) => call('mail:send', accountId, message)
+  sendMessage: (accountId, message) => call('mail:send', accountId, message),
+
+  windowControl: (action) => call('window:control', action),
+  appAction: (action) => call('app:action', action),
+  onWindowMaximized: (cb) => ipcRenderer.on('window:maximized', (_e, value) => cb(value))
 });
