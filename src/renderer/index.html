@@ -31,6 +31,7 @@
       <div class="sidebar-head">
         <span class="logo">Mailboxes</span>
         <span class="spacer"></span>
+        <button id="btn-contacts" class="icon-btn" title="Contacts" aria-label="Contacts"><span data-icon="users" data-icon-size="14"></span></button>
         <button id="btn-settings" class="icon-btn" title="Appearance" aria-label="Appearance"><span data-icon="sliders" data-icon-size="14"></span></button>
         <button id="btn-add-account" class="icon-btn" title="Add Account" aria-label="Add Account"><span data-icon="plus" data-icon-size="15"></span></button>
       </div>
@@ -70,13 +71,16 @@
         <p>Select a message to read it.</p>
       </div>
       <div id="reader" hidden>
-        <header id="reader-head">
-          <h2 id="msg-subject"></h2>
+        <header id="reader-head" class="collapsed">
+          <div class="subject-row">
+            <h2 id="msg-subject"></h2>
+            <button id="head-toggle" class="icon-btn" title="Show details" aria-label="Show details"><span data-icon="chevron-down" data-icon-size="14"></span></button>
+          </div>
           <div class="msg-meta">
-            <div><span class="meta-label">From</span> <span id="msg-from"></span></div>
-            <div><span class="meta-label">To</span> <span id="msg-to"></span></div>
-            <div id="msg-cc-row" hidden><span class="meta-label">Cc</span> <span id="msg-cc"></span></div>
-            <div><span class="meta-label">Date</span> <span id="msg-date"></span></div>
+            <div class="meta-row"><span class="meta-label">From</span> <span id="msg-from" class="addr-list"></span></div>
+            <div class="meta-row"><span class="meta-label">To</span> <span id="msg-to" class="addr-list"></span></div>
+            <div class="meta-row detail" id="msg-cc-row" hidden><span class="meta-label">Cc</span> <span id="msg-cc" class="addr-list"></span></div>
+            <div class="meta-row detail"><span class="meta-label">Date</span> <span id="msg-date"></span></div>
           </div>
           <div id="attachment-bar" hidden></div>
         </header>
@@ -174,16 +178,49 @@
         <button type="button" class="btn btn-ghost" id="cmp-cancel">Discard</button>
         <button type="submit" class="btn btn-primary" id="cmp-send">Send</button>
       </div>
+      <div id="suggest-pop" class="dd-panel" hidden></div>
     </form>
   </dialog>
+
+  <!-- Contacts dialog -->
+  <dialog id="dlg-contacts">
+    <form method="dialog">
+      <h2>Contacts</h2>
+      <div class="contact-add">
+        <input id="ct-name" type="text" placeholder="Name (optional)" autocomplete="off">
+        <input id="ct-email" type="email" placeholder="email@example.com" autocomplete="off">
+        <button type="button" class="btn" id="ct-add"><span data-icon="user-plus" data-icon-size="14"></span> Add</button>
+      </div>
+      <input id="ct-search" type="search" placeholder="Search contacts" autocomplete="off">
+      <div id="contact-list" class="contact-list"></div>
+      <div class="dlg-actions">
+        <button type="button" class="btn btn-ghost" id="ct-close">Close</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Address actions popover -->
+  <div id="addr-pop" class="dd-panel" hidden></div>
 
   <!-- Signature & template dialog -->
   <dialog id="dlg-template">
     <form id="form-template" method="dialog" novalidate>
       <h2>Signature &amp; Email Design</h2>
       <p class="hint" id="tpl-account-label"></p>
-      <label>Signature (added to every new message)
-        <textarea id="tpl-signature" rows="3" placeholder="Best regards,&#10;Your Name"></textarea>
+      <div class="grid2">
+        <label>Full Name <input id="tpl-name" type="text" placeholder="Your Name" autocomplete="off"></label>
+        <label>Title <input id="tpl-title" type="text" placeholder="Product Manager" autocomplete="off"></label>
+        <label>Company <input id="tpl-company" type="text" placeholder="Acme Inc." autocomplete="off"></label>
+        <label>Phone <input id="tpl-phone" type="text" placeholder="+1 555 010 1234" autocomplete="off"></label>
+      </div>
+      <div class="logo-row">
+        <button type="button" class="btn btn-ghost" id="tpl-logo-pick"><span data-icon="image" data-icon-size="14"></span> Company Logo…</button>
+        <img id="tpl-logo-img" alt="" hidden>
+        <button type="button" class="icon-btn small" id="tpl-logo-clear" title="Remove logo" hidden><span data-icon="x" data-icon-size="12"></span></button>
+        <span class="hint">Shown in styled emails next to your details.</span>
+      </div>
+      <label>Closing line
+        <textarea id="tpl-signature" rows="2" placeholder="Best regards,"></textarea>
       </label>
       <label class="checkbox"><input id="tpl-styled" type="checkbox"><span class="box"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6.2L4.8 9 10 3.4" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Send styled (HTML) emails using the design below</label>
       <div class="grid4" id="tpl-colors">

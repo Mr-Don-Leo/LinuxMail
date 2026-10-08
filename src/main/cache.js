@@ -123,6 +123,7 @@ function getBody(accountId, mailbox, uid) {
 }
 
 function setBody(accountId, mailbox, uid, parsed) {
+  if (parsed && parsed.html && parsed.html.length > 4 * 1024 * 1024) return;
   const data = entry(accountId).data;
   const key = mailbox + '\u0000' + uid;
   if (!data.bodies[key]) {
@@ -132,6 +133,17 @@ function setBody(accountId, mailbox, uid, parsed) {
     }
   }
   data.bodies[key] = parsed;
+  scheduleSave(accountId);
+}
+
+function clearMailbox(accountId, mailbox) {
+  const data = entry(accountId).data;
+  data.lists[mailbox] = { total: 0, messages: [], ts: Date.now() };
+  const prefix = mailbox + '\u0000';
+  for (const key of Object.keys(data.bodies)) {
+    if (key.startsWith(prefix)) delete data.bodies[key];
+  }
+  data.bodyOrder = data.bodyOrder.filter((k) => !k.startsWith(prefix));
   scheduleSave(accountId);
 }
 
@@ -152,5 +164,6 @@ module.exports = {
   removeMessage,
   getBody,
   setBody,
+  clearMailbox,
   clearAccount
 };

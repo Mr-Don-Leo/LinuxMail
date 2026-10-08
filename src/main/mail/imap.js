@@ -2,6 +2,7 @@
 
 const { ImapFlow } = require('imapflow');
 const { simpleParser } = require('mailparser');
+const { serializeParsed } = require('./parse');
 
 function clientFor(account, credentials) {
   return new ImapFlow({
@@ -175,33 +176,6 @@ async function fetchMessage(account, credentials, mailbox, uid) {
   });
 }
 
-function addressText(addr) {
-  if (!addr) return '';
-  if (Array.isArray(addr)) return addr.map((a) => a.text).filter(Boolean).join(', ');
-  return addr.text || '';
-}
-
-function serializeParsed(parsed) {
-  return {
-    subject: parsed.subject || '(no subject)',
-    from: parsed.from ? parsed.from.text : '',
-    to: parsed.to ? addressText(parsed.to) : '',
-    cc: parsed.cc ? addressText(parsed.cc) : '',
-    date: parsed.date ? parsed.date.toISOString() : null,
-    messageId: parsed.messageId || null,
-    inReplyTo: parsed.inReplyTo || null,
-    references: parsed.references || null,
-    html: typeof parsed.html === 'string' ? parsed.html : null,
-    text: parsed.text || '',
-    attachments: (parsed.attachments || []).map((att, i) => ({
-      index: i,
-      filename: att.filename || `attachment-${i + 1}`,
-      contentType: att.contentType || 'application/octet-stream',
-      size: att.size || (att.content ? att.content.length : 0)
-    }))
-  };
-}
-
 async function fetchAttachment(account, credentials, mailbox, uid, index) {
   return withClient(account, credentials, async (client) => {
     const lock = await client.getMailboxLock(mailbox);
@@ -249,6 +223,19 @@ async function deleteMessage(account, credentials, mailbox, uid) {
   });
 }
 
+async function emptyMailbox(account, credentials, mailbox) {
+  return withClient(account, credentials, async (client) => {
+    const lock = await client.getMailboxLock(mailbox);
+    try {
+      if (client.mailbox.exists > 0) {
+        await client.messageDelete('1:*');
+      }
+    } finally {
+      lock.release();
+    }
+  });
+}
+
 async function appendMessage(account, credentials, specialUse, raw, flags) {
   // Save a sent message into the account's Sent folder (if one exists).
   return withClient(account, credentials, async (client) => {
@@ -269,5 +256,6 @@ module.exports = {
   fetchAttachment,
   setFlag,
   deleteMessage,
+  emptyMailbox,
   appendMessage
 };

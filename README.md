@@ -14,6 +14,9 @@ A desktop email client for Linux. Sign in with **any** email account — Gmail, 
 - **Attachments** — view and save received attachments, attach files when composing.
 - **Safe message viewing** — HTML mail is rendered in a fully sandboxed frame with scripts blocked and remote tracking images not loaded.
 - **Secure credential storage** — passwords are encrypted with the system keyring (libsecret/KWallet) via Electron `safeStorage`.
+- **Signatures & branded emails** — structured signature builder (name, title, company, phone, logo) assembled automatically from whatever you fill in, with optional styled HTML sending.
+- **Contacts & smart recipients** — everyone you email is remembered and suggested as you type (Gmail-style); save senders to Contacts straight from any message header.
+- **Inline images render in place**, and the message header collapses to the essentials with one click to expand.
 - **Apple HIG-inspired design** — token-driven theming with automatic light/dark mode and three skins (Apple, Cyberpunk, Windows XP), plus fully custom dropdowns, checkboxes and dialogs so no native WebKit widget ever clashes with the theme.
 
 ## Install

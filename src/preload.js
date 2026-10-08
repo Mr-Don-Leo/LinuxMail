@@ -23,9 +23,17 @@ contextBridge.exposeInMainWorld('mailApi', {
   fetchMessage: (accountId, mailbox, uid) => call('mail:fetch', accountId, mailbox, uid),
   setFlag: (accountId, mailbox, uid, flag, value) => call('mail:flag', accountId, mailbox, uid, flag, value),
   deleteMessage: (accountId, mailbox, uid) => call('mail:delete', accountId, mailbox, uid),
+  emptyMailbox: (accountId, mailbox) => call('mail:emptyMailbox', accountId, mailbox),
   saveAttachment: (accountId, mailbox, uid, index) => call('mail:saveAttachment', accountId, mailbox, uid, index),
   pickAttachments: () => call('mail:pickAttachments'),
   sendMessage: (accountId, message) => call('mail:send', accountId, message),
+
+  listContacts: () => call('contacts:list'),
+  addContact: (name, address) => call('contacts:add', name, address),
+  removeContact: (address) => call('contacts:remove', address),
+  suggestRecipients: (query) => call('contacts:suggest', query),
+  hasContact: (address) => call('contacts:has', address),
+  pickLogo: () => call('template:pickLogo'),
 
   windowControl: (action) => call('window:control', action),
   appAction: (action) => call('app:action', action),
