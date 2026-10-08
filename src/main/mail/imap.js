@@ -13,18 +13,69 @@ function clientFor(account, credentials) {
   });
 }
 
-async function withClient(account, credentials, fn) {
-  const client = clientFor(account, credentials);
-  await client.connect();
+// One persistent connection per account. Connecting + logging in costs
+// seconds per operation, so reuse the session and reconnect on failure.
+const pool = new Map(); // accountId -> Promise<ImapFlow>
+
+function isConnectionError(err) {
+  const msg = (err && err.message) || '';
+  return (err && (err.code === 'NoConnection' || err.code === 'ECONNRESET' || err.code === 'EPIPE')) ||
+    /socket|connection|closed|timeout/i.test(msg);
+}
+
+async function getClient(account, credentials) {
+  const existing = pool.get(account.id);
+  if (existing) {
+    try {
+      const client = await existing;
+      if (client.usable) return client;
+    } catch (_) { /* fall through to reconnect */ }
+    pool.delete(account.id);
+  }
+  const connecting = (async () => {
+    const client = clientFor(account, credentials);
+    const evict = () => {
+      if (pool.get(account.id) === connecting) pool.delete(account.id);
+    };
+    client.on('error', evict);
+    client.on('close', evict);
+    await client.connect();
+    return client;
+  })();
+  pool.set(account.id, connecting);
   try {
-    return await fn(client);
-  } finally {
-    await client.logout().catch(() => client.close());
+    return await connecting;
+  } catch (err) {
+    if (pool.get(account.id) === connecting) pool.delete(account.id);
+    throw err;
   }
 }
 
+async function withClient(account, credentials, fn) {
+  try {
+    return await fn(await getClient(account, credentials));
+  } catch (err) {
+    if (!isConnectionError(err)) throw err;
+    // Stale session (idle disconnect, network blip): retry once fresh.
+    pool.delete(account.id);
+    return fn(await getClient(account, credentials));
+  }
+}
+
+async function closePool() {
+  const clients = [...pool.values()];
+  pool.clear();
+  await Promise.allSettled(clients.map(async (p) => {
+    const client = await p;
+    await client.logout().catch(() => client.close());
+  }));
+}
+
 async function verify(account, credentials) {
-  await withClient(account, credentials, async () => true);
+  // One-shot connection — never pooled (used for candidate accounts).
+  const client = clientFor(account, credentials);
+  await client.connect();
+  await client.logout().catch(() => client.close());
 }
 
 const SPECIAL_ORDER = { '\\Inbox': 0, '\\Drafts': 1, '\\Sent': 2, '\\Archive': 3, '\\Junk': 4, '\\Trash': 5 };
@@ -210,6 +261,7 @@ async function appendMessage(account, credentials, specialUse, raw, flags) {
 }
 
 module.exports = {
+  closePool,
   verify,
   listMailboxes,
   listMessages,

@@ -810,3 +810,73 @@ details summary:hover { color: var(--text); }
 
 .spin { animation: spin 1s linear infinite; display: inline-block; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ==========================================================================
+   Skeleton screens
+   ========================================================================== */
+
+.skel-row {
+  padding: 12px 14px 12px 24px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  flex: none;
+}
+
+.skel-top { display: flex; justify-content: space-between; gap: 8px; }
+
+.skel-bar {
+  display: inline-block;
+  height: 10px;
+  border-radius: 5px;
+  background: var(--bg-input);
+  position: relative;
+  overflow: hidden;
+}
+.skel-bar.tall { height: 14px; }
+.skel-bar.w12 { width: 12%; }
+.skel-bar.w25 { width: 25%; }
+.skel-bar.w35 { width: 35%; }
+.skel-bar.w40 { width: 40%; }
+.skel-bar.w45 { width: 45%; }
+.skel-bar.w55 { width: 55%; }
+.skel-bar.w70 { width: 70%; }
+
+.skel-bar::after, .skel-block::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, var(--bg-hover), transparent);
+  animation: skel-sweep 1.3s ease-in-out infinite;
+}
+
+.skel-reader {
+  align-self: stretch;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+}
+
+.skel-block {
+  flex: 1;
+  min-height: 220px;
+  border-radius: var(--radius-md);
+  background: var(--bg-input);
+  position: relative;
+  overflow: hidden;
+  margin-top: 8px;
+}
+
+@keyframes skel-sweep { to { transform: translateX(100%); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .skel-bar::after, .skel-block::after { animation: none; }
+}
+
+/* Refresh button spins while a background refresh is in flight */
+.icon-btn.refreshing { color: var(--accent); }
+.icon-btn.refreshing { animation: spin 1s linear infinite; }
