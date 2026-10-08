@@ -48,6 +48,30 @@ function decryptSecret(secret) {
   return Buffer.from(secret.data, 'base64').toString('utf8');
 }
 
+const HEX_COLOR = /^#[0-9a-fA-F]{3,8}$/;
+const TEMPLATE_DEFAULTS = {
+  signature: '',
+  styled: false,
+  bg: '#f5f5f7',
+  card: '#ffffff',
+  text: '#1d1d1f',
+  accent: '#007AFF',
+  font: 'sans'
+};
+
+function normalizeTemplate(input) {
+  const t = { ...TEMPLATE_DEFAULTS };
+  if (input && typeof input === 'object') {
+    t.signature = String(input.signature || '').slice(0, 2000);
+    t.styled = Boolean(input.styled);
+    for (const key of ['bg', 'card', 'text', 'accent']) {
+      if (HEX_COLOR.test(String(input[key] || ''))) t[key] = String(input[key]);
+    }
+    if (['sans', 'serif', 'mono'].includes(input.font)) t.font = input.font;
+  }
+  return t;
+}
+
 function sanitize(account) {
   // Shape sent to the renderer — never includes the password.
   return {
@@ -57,6 +81,7 @@ function sanitize(account) {
     protocol: account.protocol,
     incoming: account.incoming,
     smtp: { host: account.smtp.host, port: account.smtp.port, security: account.smtp.security },
+    template: normalizeTemplate(account.template),
     passwordStored: Boolean(account.secret)
   };
 }
@@ -94,6 +119,7 @@ function addAccount(input) {
       port: Number(input.smtp.port),
       security: input.smtp.security === 'ssl' ? 'ssl' : 'starttls'
     },
+    template: normalizeTemplate(input.template),
     secret: encryptSecret(String(input.password))
   };
   store.accounts.push(account);
@@ -122,6 +148,7 @@ function updateAccount(id, input) {
     };
   }
   if (input.password) account.secret = encryptSecret(String(input.password));
+  if (input.template !== undefined) account.template = normalizeTemplate(input.template);
   writeStore(store);
   return sanitize(account);
 }

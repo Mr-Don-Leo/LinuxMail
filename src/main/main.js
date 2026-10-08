@@ -13,6 +13,7 @@ function createWindow() {
     height: 800,
     minWidth: 900,
     minHeight: 560,
+    frame: false,
     backgroundColor: '#14161b',
     icon: path.join(__dirname, '..', '..', 'build', 'icon.png'),
     webPreferences: {
@@ -40,41 +41,13 @@ function createWindow() {
     }
   });
 
+  mainWindow.on('maximize', () => mainWindow.webContents.send('window:maximized', true));
+  mainWindow.on('unmaximize', () => mainWindow.webContents.send('window:maximized', false));
+
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
 }
-
-const menuTemplate = [
-  {
-    label: 'File',
-    submenu: [{ role: 'quit' }]
-  },
-  {
-    label: 'Edit',
-    submenu: [
-      { role: 'undo' }, { role: 'redo' }, { type: 'separator' },
-      { role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { role: 'selectAll' }
-    ]
-  },
-  {
-    label: 'View',
-    submenu: [
-      { role: 'reload' }, { role: 'toggleDevTools' }, { type: 'separator' },
-      { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { type: 'separator' },
-      { role: 'togglefullscreen' }
-    ]
-  },
-  {
-    label: 'Help',
-    submenu: [
-      {
-        label: 'LinuxMail on GitHub',
-        click: () => shell.openExternal('https://github.com/Mr-Don-Leo/LinuxMail')
-      }
-    ]
-  }
-];
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
@@ -88,7 +61,7 @@ if (!gotLock) {
   });
 
   app.whenReady().then(() => {
-    Menu.setApplicationMenu(Menu.buildFromTemplate(menuTemplate));
+    Menu.setApplicationMenu(null);
     registerIpcHandlers();
     createWindow();
 

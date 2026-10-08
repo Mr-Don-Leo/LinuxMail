@@ -9,13 +9,30 @@
   <script src="theme.js"></script>
 </head>
 <body>
+  <header id="titlebar">
+    <span class="tb-logo"><span data-icon="mail" data-icon-size="15"></span> LinuxMail</span>
+    <nav id="menubar">
+      <button class="menu-btn" data-menu="file">File</button>
+      <button class="menu-btn" data-menu="edit">Edit</button>
+      <button class="menu-btn" data-menu="view">View</button>
+      <button class="menu-btn" data-menu="help">Help</button>
+    </nav>
+    <span class="tb-drag"></span>
+    <div class="win-controls">
+      <button id="win-min" class="win-btn" title="Minimize" aria-label="Minimize"><span data-icon="minus" data-icon-size="14"></span></button>
+      <button id="win-max" class="win-btn" title="Maximize" aria-label="Maximize"><span data-icon="square" data-icon-size="12"></span></button>
+      <button id="win-close" class="win-btn close" title="Close" aria-label="Close"><span data-icon="x" data-icon-size="14"></span></button>
+    </div>
+  </header>
+  <div id="menu-pop" class="dd-panel" hidden></div>
+
   <div id="app">
     <aside id="sidebar">
       <div class="sidebar-head">
-        <span class="logo">✉ LinuxMail</span>
+        <span class="logo">Mailboxes</span>
         <span class="spacer"></span>
-        <button id="btn-settings" class="icon-btn" title="Appearance" aria-label="Appearance">◑</button>
-        <button id="btn-add-account" class="icon-btn" title="Add Account" aria-label="Add Account">+</button>
+        <button id="btn-settings" class="icon-btn" title="Appearance" aria-label="Appearance"><span data-icon="sliders" data-icon-size="14"></span></button>
+        <button id="btn-add-account" class="icon-btn" title="Add Account" aria-label="Add Account"><span data-icon="plus" data-icon-size="15"></span></button>
       </div>
       <nav id="account-list"></nav>
       <div class="sidebar-foot">
@@ -28,7 +45,7 @@
         <span id="mailbox-title">No Mailbox</span>
         <span class="spacer"></span>
         <input id="msg-search" type="search" placeholder="Search" aria-label="Search messages" disabled>
-        <button id="btn-refresh" class="icon-btn" title="Refresh" aria-label="Refresh" disabled>⟳</button>
+        <button id="btn-refresh" class="icon-btn" title="Refresh" aria-label="Refresh" disabled><span data-icon="refresh-cw" data-icon-size="13"></span></button>
       </header>
       <div id="message-list" class="scroll">
         <div class="empty-state" id="list-empty">
@@ -160,6 +177,39 @@
     </form>
   </dialog>
 
+  <!-- Signature & template dialog -->
+  <dialog id="dlg-template">
+    <form id="form-template" method="dialog" novalidate>
+      <h2>Signature &amp; Email Design</h2>
+      <p class="hint" id="tpl-account-label"></p>
+      <label>Signature (added to every new message)
+        <textarea id="tpl-signature" rows="3" placeholder="Best regards,&#10;Your Name"></textarea>
+      </label>
+      <label class="checkbox"><input id="tpl-styled" type="checkbox"><span class="box"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6.2L4.8 9 10 3.4" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Send styled (HTML) emails using the design below</label>
+      <div class="grid4" id="tpl-colors">
+        <label>Background <input id="tpl-bg" type="color" value="#f5f5f7"></label>
+        <label>Card <input id="tpl-card" type="color" value="#ffffff"></label>
+        <label>Text <input id="tpl-text" type="color" value="#1d1d1f"></label>
+        <label>Accent <input id="tpl-accent" type="color" value="#007AFF"></label>
+      </div>
+      <label>Font
+        <select id="tpl-font">
+          <option value="sans">Sans-serif (default)</option>
+          <option value="serif">Serif</option>
+          <option value="mono">Monospace</option>
+        </select>
+      </label>
+      <div>
+        <div class="pop-label">Preview</div>
+        <div id="tpl-preview"><div id="tpl-preview-card"><div id="tpl-preview-body"></div><div id="tpl-preview-sig" hidden></div></div></div>
+      </div>
+      <div class="dlg-actions">
+        <button type="button" class="btn btn-ghost" id="tpl-cancel">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="tpl-save">Save</button>
+      </div>
+    </form>
+  </dialog>
+
   <!-- Confirm dialog (replaces native confirm()) -->
   <dialog id="dlg-confirm">
     <form method="dialog">
@@ -173,6 +223,7 @@
   </dialog>
 
   <div id="toast" hidden></div>
+  <script src="icons.js"></script>
   <script src="dropdown.js"></script>
   <script src="renderer.js"></script>
 </body>
