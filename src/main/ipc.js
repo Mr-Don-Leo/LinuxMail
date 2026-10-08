@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const store = require('./store');
 const { detectProvider } = require('./providers');
+const cache = require('./cache');
 const imap = require('./mail/imap');
 const pop3 = require('./mail/pop3');
 const smtp = require('./mail/smtp');
@@ -55,34 +56,55 @@ function registerIpcHandlers() {
   });
 
   handle('accounts:update', (_e, id, input) => store.updateAccount(id, input));
-  handle('accounts:remove', (_e, id) => store.removeAccount(id));
+  handle('accounts:remove', (_e, id) => {
+    store.removeAccount(id);
+    cache.clearAccount(id);
+  });
+
+  handle('mail:cachedMailboxes', (_e, accountId) => cache.getMailboxes(accountId));
+  handle('mail:cachedList', (_e, accountId, mailbox) => cache.getList(accountId, mailbox));
+  handle('mail:cachedBody', (_e, accountId, mailbox, uid) => cache.getBody(accountId, mailbox, uid));
 
   handle('mail:mailboxes', async (_e, accountId) => {
     const account = store.getAccount(accountId);
-    return backendFor(account).listMailboxes(account, store.getCredentials(accountId));
+    const boxes = await backendFor(account).listMailboxes(account, store.getCredentials(accountId));
+    cache.setMailboxes(accountId, boxes);
+    return boxes;
   });
 
   handle('mail:list', async (_e, accountId, mailbox, offset, limit, query) => {
     const account = store.getAccount(accountId);
-    return backendFor(account).listMessages(
-      account, store.getCredentials(accountId), mailbox, offset, limit, String(query || '').trim()
+    const q = String(query || '').trim();
+    const result = await backendFor(account).listMessages(
+      account, store.getCredentials(accountId), mailbox, offset, limit, q
     );
+    if (!q) {
+      // Only unfiltered lists are cached.
+      if (offset === 0) cache.setList(accountId, mailbox, result.total, result.messages);
+      else cache.extendList(accountId, mailbox, result.total, result.messages);
+    }
+    return result;
   });
 
   handle('mail:fetch', async (_e, accountId, mailbox, uid) => {
     const account = store.getAccount(accountId);
-    return backendFor(account).fetchMessage(account, store.getCredentials(accountId), mailbox, uid);
+    const parsed = await backendFor(account).fetchMessage(account, store.getCredentials(accountId), mailbox, uid);
+    cache.setBody(accountId, mailbox, uid, parsed);
+    cache.markSeen(accountId, mailbox, uid);
+    return parsed;
   });
 
   handle('mail:flag', async (_e, accountId, mailbox, uid, flag, value) => {
     const account = store.getAccount(accountId);
     if (account.protocol === 'pop3') return; // no flags on POP3
-    return imap.setFlag(account, store.getCredentials(accountId), mailbox, uid, flag, value);
+    await imap.setFlag(account, store.getCredentials(accountId), mailbox, uid, flag, value);
+    if (flag === 'seen' && value) cache.markSeen(accountId, mailbox, uid);
   });
 
   handle('mail:delete', async (_e, accountId, mailbox, uid) => {
     const account = store.getAccount(accountId);
-    return backendFor(account).deleteMessage(account, store.getCredentials(accountId), mailbox, uid);
+    await backendFor(account).deleteMessage(account, store.getCredentials(accountId), mailbox, uid);
+    cache.removeMessage(accountId, mailbox, uid);
   });
 
   handle('mail:saveAttachment', async (event, accountId, mailbox, uid, index) => {

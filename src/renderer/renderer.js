@@ -12,6 +12,8 @@ const state = {
   total: 0,
   query: '',
   loadingMore: false,
+  loadToken: 0,
+  openToken: 0,
   messages: [],
   selected: null,         // { uid, flagged }
   composeContext: null,   // { inReplyTo, references, quote } when replying
@@ -69,6 +71,43 @@ function escapeHtml(s) {
   }[c]));
 }
 
+/* ---------- skeletons & refresh indicator ---------- */
+
+function skeletonListRows(n) {
+  const frag = document.createDocumentFragment();
+  for (let i = 0; i < n; i++) {
+    const row = document.createElement('div');
+    row.className = 'skel-row';
+    row.innerHTML = '<div class="skel-top"><span class="skel-bar w40"></span><span class="skel-bar w12"></span></div>' +
+      '<span class="skel-bar w70"></span>';
+    frag.append(row);
+  }
+  return frag;
+}
+
+function showListSkeleton() {
+  const listEl = $('message-list');
+  listEl.textContent = '';
+  listEl.append(skeletonListRows(10));
+}
+
+function showReaderSkeleton() {
+  $('reader').hidden = true;
+  const empty = $('reader-empty');
+  empty.hidden = false;
+  empty.textContent = '';
+  const card = document.createElement('div');
+  card.className = 'skel-reader';
+  card.innerHTML = '<span class="skel-bar w55 tall"></span><span class="skel-bar w35"></span>' +
+    '<span class="skel-bar w45"></span><span class="skel-bar w25"></span><div class="skel-block"></div>';
+  empty.append(card);
+}
+
+function setRefreshing(on) {
+  const btn = $('btn-refresh');
+  btn.classList.toggle('refreshing', Boolean(on));
+}
+
 /* ---------- sidebar ---------- */
 
 async function refreshAccounts() {
@@ -102,10 +141,12 @@ function renderSidebar() {
 
     const folders = state.mailboxes[account.id];
     if (!folders) {
-      const loading = document.createElement('div');
-      loading.className = 'folder';
-      loading.textContent = 'Loading folders…';
-      block.append(loading);
+      for (let i = 0; i < 3; i++) {
+        const skel = document.createElement('div');
+        skel.className = 'folder';
+        skel.innerHTML = '<span class="skel-bar w55"></span>';
+        block.append(skel);
+      }
       loadMailboxes(account.id);
     } else {
       for (const box of folders) {
@@ -136,18 +177,37 @@ function renderSidebar() {
   }
 }
 
+const mailboxLoads = new Set();
+
+function autoOpenInbox(accountId) {
+  if (state.current) return;
+  const inbox = (state.mailboxes[accountId] || []).find((b) => b.specialUse === '\\Inbox');
+  if (inbox) openMailbox(accountId, inbox.path, inbox.name);
+}
+
 async function loadMailboxes(accountId) {
+  if (mailboxLoads.has(accountId)) return;
+  mailboxLoads.add(accountId);
   try {
-    state.mailboxes[accountId] = await mailApi.listMailboxes(accountId);
-  } catch (err) {
-    state.mailboxes[accountId] = [];
-    toast(err.message, true);
-  }
-  renderSidebar();
-  // Auto-open the first inbox if nothing is open yet.
-  if (!state.current) {
-    const inbox = (state.mailboxes[accountId] || []).find((b) => b.specialUse === '\\Inbox');
-    if (inbox) openMailbox(accountId, inbox.path, inbox.name);
+    // Last known folders render instantly while fresh ones load.
+    const cached = await mailApi.cachedMailboxes(accountId).catch(() => null);
+    if (cached && cached.length && !state.mailboxes[accountId]) {
+      state.mailboxes[accountId] = cached;
+      renderSidebar();
+      autoOpenInbox(accountId);
+    }
+    try {
+      state.mailboxes[accountId] = await mailApi.listMailboxes(accountId);
+    } catch (err) {
+      if (!state.mailboxes[accountId]) {
+        state.mailboxes[accountId] = [];
+        toast(err.message, true);
+      }
+    }
+    renderSidebar();
+    autoOpenInbox(accountId);
+  } finally {
+    mailboxLoads.delete(accountId);
   }
 }
 
@@ -188,21 +248,33 @@ async function openMailbox(accountId, mailbox, displayName) {
 
 async function loadMessages(append = false) {
   if (!state.current) return;
-  const listEl = $('message-list');
+  const token = append ? state.loadToken : ++state.loadToken;
+  const { accountId, mailbox } = state.current;
+
   if (!append) {
     state.offset = 0;
-    listEl.textContent = '';
-    const loading = document.createElement('div');
-    loading.className = 'empty-state';
-    loading.innerHTML = '<p><span class="spin">⟳</span> Loading messages…</p>';
-    listEl.append(loading);
+    let haveCache = false;
+    if (!state.query) {
+      // Render the last known list instantly, then refresh from the server.
+      const cached = await mailApi.cachedList(accountId, mailbox).catch(() => null);
+      if (token !== state.loadToken) return;
+      if (cached && cached.messages.length) {
+        state.total = cached.total;
+        state.messages = cached.messages;
+        renderMessageList();
+        haveCache = true;
+      }
+    }
+    if (!haveCache) showListSkeleton();
+    setRefreshing(true);
   }
   state.loadingMore = true;
 
   try {
     const { total, messages } = await mailApi.listMessages(
-      state.current.accountId, state.current.mailbox, state.offset, PAGE_SIZE, state.query
+      accountId, mailbox, state.offset, PAGE_SIZE, state.query
     );
+    if (token !== state.loadToken) return;
     state.total = total;
     state.messages = append ? state.messages.concat(messages) : messages;
     renderMessageList();
@@ -211,13 +283,21 @@ async function loadMessages(append = false) {
       .then((boxes) => { state.mailboxes[state.current.accountId] = boxes; renderSidebar(); })
       .catch(() => {});
   } catch (err) {
-    listEl.textContent = '';
-    const fail = document.createElement('div');
-    fail.className = 'empty-state';
-    fail.textContent = err.message;
-    listEl.append(fail);
+    if (token === state.loadToken) {
+      if (state.messages.length) {
+        toast(err.message, true); // keep showing the cached list
+      } else {
+        const listEl = $('message-list');
+        listEl.textContent = '';
+        const fail = document.createElement('div');
+        fail.className = 'empty-state';
+        fail.textContent = err.message;
+        listEl.append(fail);
+      }
+    }
   } finally {
     state.loadingMore = false;
+    if (token === state.loadToken) setRefreshing(false);
   }
 }
 
@@ -287,55 +367,72 @@ function closeReader() {
 
 async function openMessage(msgSummary) {
   state.selected = { uid: msgSummary.uid, flagged: msgSummary.flagged };
+  const token = ++state.openToken;
+  const { accountId, mailbox } = state.current;
   renderMessageList();
-  $('reader-empty').hidden = false;
-  $('reader-empty').textContent = 'Loading message…';
-  $('reader').hidden = true;
 
-  try {
-    const msg = await mailApi.fetchMessage(
-      state.current.accountId, state.current.mailbox, msgSummary.uid
-    );
-    msgSummary.seen = true;
-    state.selected.msg = msg;
-
-    $('msg-subject').textContent = msg.subject;
-    $('msg-from').textContent = msg.from;
-    $('msg-to').textContent = msg.to;
-    $('msg-cc-row').hidden = !msg.cc;
-    $('msg-cc').textContent = msg.cc;
-    $('msg-date').textContent = msg.date ? new Date(msg.date).toLocaleString() : '';
-    $('btn-flag').textContent = state.selected.flagged ? 'Unflag' : 'Flag';
-
-    const attBar = $('attachment-bar');
-    attBar.textContent = '';
-    attBar.hidden = msg.attachments.length === 0;
-    for (const att of msg.attachments) {
-      const chip = document.createElement('button');
-      chip.className = 'attachment-chip';
-      chip.type = 'button';
-      chip.textContent = `📎 ${att.filename}${att.size ? ' (' + formatSize(att.size) + ')' : ''}`;
-      chip.addEventListener('click', async () => {
-        try {
-          const res = await mailApi.saveAttachment(
-            state.current.accountId, state.current.mailbox, msgSummary.uid, att.index
-          );
-          if (res.saved) toast('Saved to ' + res.path);
-        } catch (err) {
-          toast(err.message, true);
-        }
-      });
-      attBar.append(chip);
+  // A cached body is immutable: render it and skip the network entirely,
+  // just telling the server to mark the message read.
+  const cached = await mailApi.cachedBody(accountId, mailbox, msgSummary.uid).catch(() => null);
+  if (token !== state.openToken) return;
+  if (cached) {
+    if (!msgSummary.seen) {
+      msgSummary.seen = true;
+      mailApi.setFlag(accountId, mailbox, msgSummary.uid, 'seen', true).catch(() => {});
     }
+    showMessage(cached, msgSummary);
+    return;
+  }
 
-    renderBody(msg);
-    $('reader-empty').hidden = true;
-    $('reader').hidden = false;
-    setReaderButtons(true);
-    renderMessageList();
+  showReaderSkeleton();
+  try {
+    const msg = await mailApi.fetchMessage(accountId, mailbox, msgSummary.uid);
+    if (token !== state.openToken) return;
+    msgSummary.seen = true;
+    showMessage(msg, msgSummary);
   } catch (err) {
+    if (token !== state.openToken) return;
     $('reader-empty').textContent = err.message;
   }
+}
+
+function showMessage(msg, msgSummary) {
+  state.selected.msg = msg;
+
+  $('msg-subject').textContent = msg.subject;
+  $('msg-from').textContent = msg.from;
+  $('msg-to').textContent = msg.to;
+  $('msg-cc-row').hidden = !msg.cc;
+  $('msg-cc').textContent = msg.cc;
+  $('msg-date').textContent = msg.date ? new Date(msg.date).toLocaleString() : '';
+  $('btn-flag').textContent = state.selected.flagged ? 'Unflag' : 'Flag';
+
+  const attBar = $('attachment-bar');
+  attBar.textContent = '';
+  attBar.hidden = msg.attachments.length === 0;
+  for (const att of msg.attachments) {
+    const chip = document.createElement('button');
+    chip.className = 'attachment-chip';
+    chip.type = 'button';
+    chip.textContent = `📎 ${att.filename}${att.size ? ' (' + formatSize(att.size) + ')' : ''}`;
+    chip.addEventListener('click', async () => {
+      try {
+        const res = await mailApi.saveAttachment(
+          state.current.accountId, state.current.mailbox, msgSummary.uid, att.index
+        );
+        if (res.saved) toast('Saved to ' + res.path);
+      } catch (err) {
+        toast(err.message, true);
+      }
+    });
+    attBar.append(chip);
+  }
+
+  renderBody(msg);
+  $('reader-empty').hidden = true;
+  $('reader').hidden = false;
+  setReaderButtons(true);
+  renderMessageList();
 }
 
 function renderBody(msg) {
