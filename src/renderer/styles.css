@@ -1024,3 +1024,124 @@ input[type="color"]:focus-visible { outline: none; border-color: var(--accent); 
   white-space: pre-wrap;
   opacity: 0.85;
 }
+
+/* ==========================================================================
+   Collapsible reader head & address chips
+   ========================================================================== */
+
+.subject-row { display: flex; align-items: flex-start; gap: 10px; }
+.subject-row h2 { flex: 1; }
+#head-toggle { flex: none; border: 0; }
+#head-toggle svg { transition: transform 140ms ease; }
+#reader-head:not(.collapsed) #head-toggle svg { transform: rotate(180deg); }
+
+.meta-row { display: flex; gap: 6px; min-width: 0; }
+#reader-head.collapsed .meta-row.detail { display: none; }
+#reader-head.collapsed .addr-list {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.addr-list { min-width: 0; }
+
+.addr-chip {
+  color: var(--accent);
+  text-decoration: none;
+  border-radius: 4px;
+  padding: 0 2px;
+  cursor: pointer;
+}
+.addr-chip:hover { text-decoration: underline; background: var(--accent-soft); }
+.addr-chip + .addr-chip::before {
+  content: ", ";
+  color: var(--text-tertiary);
+  text-decoration: none;
+  display: inline-block;
+  padding-right: 2px;
+}
+
+#addr-pop {
+  position: fixed;
+  z-index: 75;
+  min-width: 200px;
+  max-width: 320px;
+}
+#addr-pop[hidden] { display: none; }
+.addr-pop-head {
+  padding: 7px 10px 5px;
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  user-select: text;
+}
+.dd-option.disabled { color: var(--text-tertiary); cursor: default; }
+.dd-option.disabled:hover { background: none; }
+
+/* ==========================================================================
+   Recipient autocomplete
+   ========================================================================== */
+
+#suggest-pop {
+  position: fixed;
+  z-index: 75;
+  max-height: 240px;
+}
+#suggest-pop[hidden] { display: none; }
+.sug-label { display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.sug-label svg { flex: none; color: var(--accent); }
+.sug-addr { color: var(--text-tertiary); font-size: 12px; }
+
+/* ==========================================================================
+   Contacts dialog
+   ========================================================================== */
+
+#dlg-contacts { width: min(520px, 92vw); }
+
+.contact-add { display: grid; grid-template-columns: 1fr 1.4fr auto; gap: 8px; }
+.contact-add .btn { display: inline-flex; align-items: center; gap: 6px; }
+
+.contact-list {
+  max-height: 300px;
+  min-height: 120px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+}
+.contact-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  flex: none;
+}
+.contact-row:last-child { border-bottom: 0; }
+.contact-info { flex: 1; min-width: 0; }
+.contact-name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.contact-mail { font-size: 12px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ==========================================================================
+   Template dialog: logo & structured signature preview
+   ========================================================================== */
+
+.logo-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.logo-row .btn { display: inline-flex; align-items: center; gap: 7px; }
+#tpl-logo-img {
+  max-height: 36px;
+  max-width: 90px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: #fff;
+  padding: 2px;
+}
+
+.sig-closing { white-space: pre-wrap; margin-bottom: 10px; }
+.sig-row { display: flex; align-items: center; gap: 12px; }
+.sig-logo { max-height: 40px; max-width: 96px; display: block; }
+.sig-name { font-weight: 600; font-size: 14px; }
+.sig-role { font-size: 12px; opacity: 0.75; }

@@ -2,6 +2,7 @@
 
 const Pop3Command = require('node-pop3');
 const { simpleParser } = require('mailparser');
+const { serializeParsed } = require('./parse');
 
 // POP3 has one mailbox and no server-side flags, so the app keeps a small
 // local cache of parsed headers keyed by UIDL, refreshed on each sync.
@@ -119,24 +120,7 @@ async function fetchMessage(account, credentials, _mailbox, uid) {
     const msgNum = await resolveMsgNum(client, uid);
     const raw = await client.RETR(msgNum);
     const parsed = await simpleParser(raw);
-    return {
-      subject: parsed.subject || '(no subject)',
-      from: parsed.from ? parsed.from.text : '',
-      to: parsed.to ? (Array.isArray(parsed.to) ? parsed.to.map((t) => t.text).join(', ') : parsed.to.text) : '',
-      cc: '',
-      date: parsed.date ? parsed.date.toISOString() : null,
-      messageId: parsed.messageId || null,
-      inReplyTo: parsed.inReplyTo || null,
-      references: parsed.references || null,
-      html: typeof parsed.html === 'string' ? parsed.html : null,
-      text: parsed.text || '',
-      attachments: (parsed.attachments || []).map((att, i) => ({
-        index: i,
-        filename: att.filename || `attachment-${i + 1}`,
-        contentType: att.contentType || 'application/octet-stream',
-        size: att.size || (att.content ? att.content.length : 0)
-      }))
-    };
+    return serializeParsed(parsed);
   } finally {
     await client.QUIT().catch(() => {});
   }
