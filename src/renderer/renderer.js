@@ -55,13 +55,13 @@ function formatSize(bytes) {
 
 function folderIcon(specialUse) {
   switch (specialUse) {
-    case '\\Inbox': return '📥';
-    case '\\Sent': return '📤';
-    case '\\Drafts': return '📝';
-    case '\\Trash': return '🗑';
-    case '\\Junk': return '⚠';
-    case '\\Archive': return '📦';
-    default: return '📁';
+    case '\\Inbox': return 'inbox';
+    case '\\Sent': return 'send';
+    case '\\Drafts': return 'file-text';
+    case '\\Trash': return 'trash-2';
+    case '\\Junk': return 'alert-triangle';
+    case '\\Archive': return 'archive';
+    default: return 'folder';
   }
 }
 
@@ -131,12 +131,17 @@ function renderSidebar() {
     const label = document.createElement('span');
     label.textContent = account.email;
     label.title = `${account.name} <${account.email}> (${account.protocol.toUpperCase()})`;
+    const edit = document.createElement('button');
+    edit.className = 'icon-btn small';
+    edit.title = 'Signature & Email Design';
+    edit.innerHTML = Icons.svg('edit-2', 11);
+    edit.addEventListener('click', () => openTemplateDialog(account));
     const remove = document.createElement('button');
     remove.className = 'icon-btn small';
     remove.title = 'Remove account';
-    remove.textContent = '×';
+    remove.innerHTML = Icons.svg('x', 12);
     remove.addEventListener('click', () => removeAccount(account));
-    head.append(label, remove);
+    head.append(label, edit, remove);
     block.append(head);
 
     const folders = state.mailboxes[account.id];
@@ -156,8 +161,8 @@ function renderSidebar() {
           state.current.accountId === account.id && state.current.mailbox === box.path;
         if (active) btn.classList.add('active');
 
-        const icon = document.createElement('span');
-        icon.textContent = folderIcon(box.specialUse);
+        const icon = Icons.el(folderIcon(box.specialUse), 15);
+        icon.classList.add('folder-icon');
         const name = document.createElement('span');
         name.className = 'folder-name';
         name.textContent = box.name;
@@ -333,7 +338,8 @@ function renderMessageList() {
     sub.className = 'msg-subline';
     const badges = document.createElement('span');
     badges.className = 'msg-badges';
-    badges.textContent = (msg.flagged ? '★' : '') + (msg.hasAttachments ? '📎' : '');
+    badges.innerHTML = (msg.flagged ? Icons.svg('star', 11) : '') +
+      (msg.hasAttachments ? Icons.svg('paperclip', 11) : '');
     const subj = document.createElement('span');
     subj.className = 'msg-subject-text';
     subj.textContent = msg.subject;
@@ -414,7 +420,8 @@ function showMessage(msg, msgSummary) {
     const chip = document.createElement('button');
     chip.className = 'attachment-chip';
     chip.type = 'button';
-    chip.textContent = `📎 ${att.filename}${att.size ? ' (' + formatSize(att.size) + ')' : ''}`;
+    chip.innerHTML = Icons.svg('paperclip', 12) +
+      ' <span>' + escapeHtml(att.filename) + (att.size ? ' (' + formatSize(att.size) + ')' : '') + '</span>';
     chip.addEventListener('click', async () => {
       try {
         const res = await mailApi.saveAttachment(
@@ -674,13 +681,17 @@ function openCompose(opts = {}) {
 
   $('cmp-to').value = opts.to || '';
   $('cmp-subject').value = opts.subject || '';
-  $('cmp-body').value = opts.body || '';
+  const fromAccount = state.accounts.find((a) => a.id === fromSel.value);
+  const sig = fromAccount && fromAccount.template && fromAccount.template.signature;
+  $('cmp-body').value = (sig ? '\n\n-- \n' + sig : '') + (opts.body || '');
   state.composeContext = {
     inReplyTo: opts.inReplyTo || null,
     references: opts.references || null
   };
   dlgCompose.showModal();
-  (opts.to ? $('cmp-body') : $('cmp-to')).focus();
+  const focusTarget = opts.to ? $('cmp-body') : $('cmp-to');
+  focusTarget.focus();
+  if (focusTarget === $('cmp-body')) focusTarget.setSelectionRange(0, 0);
 }
 
 function renderAttachList() {
@@ -769,6 +780,171 @@ function confirmDialog(title, text, okLabel) {
 
 $('acc-show-pass').addEventListener('change', (e) => {
   $('acc-password').type = e.target.checked ? 'text' : 'password';
+});
+
+/* ---------- titlebar: window controls & menus ---------- */
+
+$('win-min').addEventListener('click', () => mailApi.windowControl('minimize'));
+$('win-close').addEventListener('click', () => mailApi.windowControl('close'));
+$('win-max').addEventListener('click', () => mailApi.windowControl('maximize'));
+document.querySelector('.tb-drag').addEventListener('dblclick', () => mailApi.windowControl('maximize'));
+mailApi.onWindowMaximized((maximized) => {
+  $('win-max').innerHTML = Icons.svg(maximized ? 'copy' : 'square', 12);
+  $('win-max').title = maximized ? 'Restore' : 'Maximize';
+});
+
+const MENUS = {
+  file: [
+    { label: 'New Message', action: () => openCompose() },
+    { label: 'Add Account', action: () => $('btn-add-account').click() },
+    { sep: true },
+    { label: 'Quit', action: () => mailApi.appAction('quit') }
+  ],
+  edit: [
+    { label: 'Undo', action: () => mailApi.appAction('undo') },
+    { label: 'Redo', action: () => mailApi.appAction('redo') },
+    { sep: true },
+    { label: 'Cut', action: () => mailApi.appAction('cut') },
+    { label: 'Copy', action: () => mailApi.appAction('copy') },
+    { label: 'Paste', action: () => mailApi.appAction('paste') },
+    { label: 'Select All', action: () => mailApi.appAction('select-all') }
+  ],
+  view: [
+    { label: 'Reload', action: () => mailApi.appAction('reload') },
+    { label: 'Toggle Developer Tools', action: () => mailApi.appAction('devtools') },
+    { sep: true },
+    { label: 'Zoom In', action: () => mailApi.appAction('zoom-in') },
+    { label: 'Zoom Out', action: () => mailApi.appAction('zoom-out') },
+    { label: 'Actual Size', action: () => mailApi.appAction('zoom-reset') },
+    { sep: true },
+    { label: 'Toggle Full Screen', action: () => mailApi.appAction('fullscreen') }
+  ],
+  help: [
+    { label: 'LinuxMail on GitHub', action: () => mailApi.appAction('github') }
+  ]
+};
+
+let openMenuBtn = null;
+
+function closeMenu() {
+  $('menu-pop').hidden = true;
+  if (openMenuBtn) openMenuBtn.classList.remove('active');
+  openMenuBtn = null;
+}
+
+function openMenu(btn) {
+  const pop = $('menu-pop');
+  pop.textContent = '';
+  for (const item of MENUS[btn.dataset.menu]) {
+    if (item.sep) {
+      const sep = document.createElement('div');
+      sep.className = 'menu-sep';
+      pop.append(sep);
+      continue;
+    }
+    const row = document.createElement('div');
+    row.className = 'dd-option';
+    row.textContent = item.label;
+    row.addEventListener('click', () => { closeMenu(); item.action(); });
+    pop.append(row);
+  }
+  const rect = btn.getBoundingClientRect();
+  pop.style.left = rect.left + 'px';
+  pop.style.top = rect.bottom + 4 + 'px';
+  pop.hidden = false;
+  if (openMenuBtn) openMenuBtn.classList.remove('active');
+  openMenuBtn = btn;
+  btn.classList.add('active');
+}
+
+document.querySelectorAll('.menu-btn').forEach((btn) => {
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (openMenuBtn === btn) closeMenu();
+    else openMenu(btn);
+  });
+  btn.addEventListener('mouseenter', () => {
+    if (openMenuBtn && openMenuBtn !== btn) openMenu(btn);
+  });
+});
+document.addEventListener('pointerdown', (e) => {
+  if (openMenuBtn && !$('menu-pop').contains(e.target) && e.target !== openMenuBtn) closeMenu();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && openMenuBtn) closeMenu();
+});
+
+/* ---------- signature & template dialog ---------- */
+
+const dlgTemplate = $('dlg-template');
+let templateAccountId = null;
+
+const TPL_FONT_STACKS = {
+  sans: "-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+  serif: "Georgia, 'Times New Roman', serif",
+  mono: "'SF Mono', Menlo, Consolas, monospace"
+};
+
+function templatePreview() {
+  const styled = $('tpl-styled').checked;
+  const box = $('tpl-preview');
+  const card = $('tpl-preview-card');
+  const sigEl = $('tpl-preview-sig');
+  box.style.background = styled ? $('tpl-bg').value : 'var(--bg)';
+  card.style.background = styled ? $('tpl-card').value : 'var(--bg-elevated)';
+  card.style.color = styled ? $('tpl-text').value : 'var(--text)';
+  card.style.fontFamily = TPL_FONT_STACKS[$('tpl-font').value] || TPL_FONT_STACKS.sans;
+  $('tpl-preview-body').textContent = 'Hi there,\n\nThis is how your emails will look.';
+  const sig = $('tpl-signature').value.trim();
+  sigEl.hidden = !sig;
+  sigEl.textContent = sig;
+  sigEl.style.borderTopColor = styled ? $('tpl-accent').value : 'var(--border)';
+  $('tpl-colors').style.opacity = styled ? 1 : 0.45;
+}
+
+function openTemplateDialog(account) {
+  templateAccountId = account.id;
+  const t = account.template || {};
+  $('tpl-account-label').textContent = 'For ' + account.email;
+  $('tpl-signature').value = t.signature || '';
+  $('tpl-styled').checked = Boolean(t.styled);
+  $('tpl-bg').value = t.bg || '#f5f5f7';
+  $('tpl-card').value = t.card || '#ffffff';
+  $('tpl-text').value = t.text || '#1d1d1f';
+  $('tpl-accent').value = t.accent || '#007AFF';
+  $('tpl-font').value = t.font || 'sans';
+  window.Dropdown.sync($('tpl-font'));
+  templatePreview();
+  dlgTemplate.showModal();
+}
+
+for (const id of ['tpl-signature', 'tpl-styled', 'tpl-bg', 'tpl-card', 'tpl-text', 'tpl-accent', 'tpl-font']) {
+  $(id).addEventListener('input', templatePreview);
+  $(id).addEventListener('change', templatePreview);
+}
+
+$('tpl-cancel').addEventListener('click', () => dlgTemplate.close());
+
+$('form-template').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  try {
+    await mailApi.updateAccount(templateAccountId, {
+      template: {
+        signature: $('tpl-signature').value,
+        styled: $('tpl-styled').checked,
+        bg: $('tpl-bg').value,
+        card: $('tpl-card').value,
+        text: $('tpl-text').value,
+        accent: $('tpl-accent').value,
+        font: $('tpl-font').value
+      }
+    });
+    dlgTemplate.close();
+    toast('Template saved');
+    await refreshAccounts();
+  } catch (err) {
+    toast(err.message, true);
+  }
 });
 
 /* ---------- boot ---------- */
