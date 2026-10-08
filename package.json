@@ -1,7 +1,7 @@
 {
   "name": "linuxmail",
   "productName": "LinuxMail",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "description": "A desktop email client for Linux. Sign in with any email account \u2014 IMAP, POP3 and SMTP supported.",
   "main": "src/main/main.js",
   "author": {
