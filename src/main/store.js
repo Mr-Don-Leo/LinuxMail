@@ -112,7 +112,16 @@ function getAccount(id) {
 
 function getCredentials(id) {
   const account = getAccount(id);
-  return { user: account.loginUser || account.email, password: decryptSecret(account.secret) };
+  let password;
+  try {
+    password = decryptSecret(account.secret);
+  } catch (_) {
+    // Keyring changed or locked — the user has to enter the password again.
+    const err = new Error('Saved password could not be unlocked.');
+    err.code = 'ECREDS';
+    throw err;
+  }
+  return { user: account.loginUser || account.email, password };
 }
 
 function addAccount(input) {

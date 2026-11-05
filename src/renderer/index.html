@@ -248,6 +248,21 @@
   </dialog>
 
   <!-- Confirm dialog (replaces native confirm()) -->
+  <dialog id="dlg-reauth">
+    <form id="form-reauth" method="dialog" novalidate>
+      <h2>Sign In Again</h2>
+      <p class="hint" id="reauth-text"></p>
+      <label>Email Address <input id="reauth-email" type="text" readonly tabindex="-1"></label>
+      <label>Password <input id="reauth-password" type="password" placeholder="Password or app password" autocomplete="off"></label>
+      <label class="checkbox"><input id="reauth-show-pass" type="checkbox"><span class="box"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6.2L4.8 9 10 3.4" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Show password</label>
+      <p class="form-error" id="reauth-error" hidden></p>
+      <div class="dlg-actions">
+        <button type="button" class="btn btn-ghost" id="reauth-cancel">Not Now</button>
+        <button type="submit" class="btn btn-primary" id="reauth-submit">Sign In</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="dlg-confirm">
     <form method="dialog">
       <h2 id="confirm-title">Are You Sure?</h2>
