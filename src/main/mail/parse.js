@@ -69,12 +69,13 @@ function serializeParsed(parsed) {
     html,
     text: parsed.text || '',
     // index stays the position in the full attachment array so downloads
-    // keep working even though inline images are hidden here.
+    // keep working even though inline images are hidden here. IMAP messages
+    // opened part by part use the bodystructure part id instead.
     attachments: attachments
       .map((att, i) => ({ att, i }))
       .filter(({ att }) => !inline.has(att))
       .map(({ att, i }) => ({
-        index: i,
+        index: att.part || i,
         filename: att.filename || `attachment-${i + 1}`,
         contentType: att.contentType || 'application/octet-stream',
         size: att.size || (att.content ? att.content.length : 0)

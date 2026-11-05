@@ -173,14 +173,111 @@ function hasAttachmentParts(node) {
   return false;
 }
 
+// Fewer, larger partial fetches: each one is a server round trip, and the
+// imapflow default (64 KB) made multi-MB messages take minutes.
+const CHUNK_SIZE = 1024 * 1024;
+// Messages above this size are opened part by part so attachments are
+// never downloaded just to read the text.
+const FULL_DOWNLOAD_LIMIT = 2 * 1024 * 1024;
+const INLINE_IMAGE_LIMIT = 2 * 1024 * 1024;
+
+async function readStream(stream) {
+  const chunks = [];
+  for await (const chunk of stream) chunks.push(chunk);
+  return Buffer.concat(chunks);
+}
+
+async function downloadPart(client, uid, part) {
+  const { meta, content } = await client.download(String(uid), part, { uid: true, chunkSize: CHUNK_SIZE });
+  return { meta, content: await readStream(content) };
+}
+
+function decodedSize(node) {
+  const size = node.size || 0;
+  return node.encoding === 'base64' ? Math.floor(size * 3 / 4) : size;
+}
+
+// Splits a bodystructure into the text bodies, cid-referenced images and
+// real attachments, without downloading anything.
+function classifyParts(root) {
+  const out = { plain: null, html: null, images: [], attachments: [] };
+  const walk = (node) => {
+    if (Array.isArray(node.childNodes) && node.type !== 'message/rfc822') {
+      node.childNodes.forEach(walk);
+      return;
+    }
+    const part = node.part || '1';
+    const params = node.parameters || {};
+    const dispParams = node.dispositionParameters || {};
+    const isAttachment = node.disposition === 'attachment';
+    if (!isAttachment && node.type === 'text/plain' && !out.plain) { out.plain = part; return; }
+    if (!isAttachment && node.type === 'text/html' && !out.html) { out.html = part; return; }
+    const cid = node.id ? String(node.id).replace(/[<>]/g, '') : null;
+    if (!isAttachment && cid && /^image\//.test(node.type || '')) {
+      out.images.push({ part, cid, contentType: node.type, size: decodedSize(node) });
+      return;
+    }
+    let filename = dispParams.filename || params.name;
+    if (!filename && node.type === 'message/rfc822') {
+      filename = ((node.envelope && node.envelope.subject) || 'message') + '.eml';
+    }
+    out.attachments.push({
+      part,
+      filename: filename || `attachment-${out.attachments.length + 1}`,
+      contentType: node.type || 'application/octet-stream',
+      size: decodedSize(node)
+    });
+  };
+  walk(root);
+  return out;
+}
+
+async function downloadText(client, uid, part) {
+  // Match mailparser, which normalizes line endings to LF.
+  return (await downloadPart(client, uid, part)).content.toString('utf8').replace(/\r\n/g, '\n');
+}
+
+async function fetchMessageByParts(client, uid, bodyStructure) {
+  const parts = classifyParts(bodyStructure);
+  const head = await client.fetchOne(String(uid), { headers: true }, { uid: true });
+  // Parsing the header block alone gives mailparser-shaped addresses.
+  const parsed = await simpleParser(head.headers);
+
+  const html = parts.html ? await downloadText(client, uid, parts.html) : null;
+  let text = parts.plain ? await downloadText(client, uid, parts.plain) : '';
+  if (!text && html) {
+    // mailparser derives plain text from HTML (used when quoting replies).
+    text = (await simpleParser('Content-Type: text/html; charset=utf-8\r\n\r\n' + html)).text || '';
+  }
+
+  const attachments = parts.attachments.map((att) => ({ ...att }));
+  for (const img of parts.images) {
+    const wanted = html && html.includes('cid:' + img.cid) && img.size <= INLINE_IMAGE_LIMIT;
+    if (!wanted) {
+      attachments.push({ part: img.part, filename: `image-${img.cid}`, contentType: img.contentType, size: img.size });
+      continue;
+    }
+    const { content } = await downloadPart(client, uid, img.part);
+    attachments.push({ part: img.part, cid: img.cid, contentType: img.contentType, size: content.length, content });
+  }
+
+  return serializeParsed({ ...parsed, html, text, attachments });
+}
+
 async function fetchMessage(account, credentials, mailbox, uid) {
   return withClient(account, credentials, async (client) => {
     const lock = await client.getMailboxLock(mailbox);
     try {
-      const { content } = await client.download(String(uid), undefined, { uid: true });
-      const parsed = await simpleParser(content);
+      const info = await client.fetchOne(String(uid), { size: true, bodyStructure: true }, { uid: true });
+      let result;
+      if (info && info.bodyStructure && info.size > FULL_DOWNLOAD_LIMIT) {
+        result = await fetchMessageByParts(client, uid, info.bodyStructure);
+      } else {
+        const { content } = await client.download(String(uid), undefined, { uid: true, chunkSize: CHUNK_SIZE });
+        result = serializeParsed(await simpleParser(content));
+      }
       await client.messageFlagsAdd(String(uid), ['\\Seen'], { uid: true });
-      return serializeParsed(parsed);
+      return result;
     } finally {
       lock.release();
     }
@@ -191,7 +288,12 @@ async function fetchAttachment(account, credentials, mailbox, uid, index) {
   return withClient(account, credentials, async (client) => {
     const lock = await client.getMailboxLock(mailbox);
     try {
-      const { content } = await client.download(String(uid), undefined, { uid: true });
+      if (typeof index === 'string') {
+        // Bodystructure part id from a part-by-part fetch: download only it.
+        const { meta, content } = await downloadPart(client, uid, index);
+        return { filename: meta.filename || `attachment-${index}`, content };
+      }
+      const { content } = await client.download(String(uid), undefined, { uid: true, chunkSize: CHUNK_SIZE });
       const parsed = await simpleParser(content);
       const att = (parsed.attachments || [])[index];
       if (!att) throw new Error('Attachment not found');
