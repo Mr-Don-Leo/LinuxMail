@@ -2,9 +2,14 @@
 
 const { contextBridge, ipcRenderer } = require('electron');
 
+let authRequired = null;
+
 async function call(channel, ...args) {
   const result = await ipcRenderer.invoke(channel, ...args);
-  if (!result.ok) throw new Error(result.error);
+  if (!result.ok) {
+    if (result.reauth && authRequired) authRequired(result.reauth, result.error);
+    throw new Error(result.error);
+  }
   return result.data;
 }
 
@@ -13,6 +18,8 @@ contextBridge.exposeInMainWorld('mailApi', {
   detectProvider: (email) => call('accounts:detect', email),
   addAccount: (input) => call('accounts:add', input),
   updateAccount: (id, input) => call('accounts:update', id, input),
+  reauthAccount: (id, password) => call('accounts:reauth', id, password),
+  onAuthRequired: (cb) => { authRequired = cb; },
   removeAccount: (id) => call('accounts:remove', id),
 
   listMailboxes: (accountId) => call('mail:mailboxes', accountId),

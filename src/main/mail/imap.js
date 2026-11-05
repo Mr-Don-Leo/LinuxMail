@@ -72,6 +72,17 @@ async function closePool() {
   }));
 }
 
+async function dropClient(accountId) {
+  // Forget a pooled session so the next call logs in with fresh credentials.
+  const existing = pool.get(accountId);
+  if (!existing) return;
+  pool.delete(accountId);
+  try {
+    const client = await existing;
+    await client.logout().catch(() => client.close());
+  } catch (_) { /* connection never came up */ }
+}
+
 async function verify(account, credentials) {
   // One-shot connection — never pooled (used for candidate accounts).
   const client = clientFor(account, credentials);
@@ -249,6 +260,7 @@ async function appendMessage(account, credentials, specialUse, raw, flags) {
 
 module.exports = {
   closePool,
+  dropClient,
   verify,
   listMailboxes,
   listMessages,

@@ -15,10 +15,26 @@ function backendFor(account) {
   return account.protocol === 'pop3' ? pop3 : imap;
 }
 
+// True when the server rejected the stored credentials (expired/changed
+// password), as opposed to network or mailbox errors. imapflow reports a
+// failed LOGIN as a bare "Command failed" with authenticationFailed set.
+function isAuthError(err) {
+  if (!err) return false;
+  if (err.authenticationFailed || err.code === 'EAUTH' || err.code === 'ECREDS') return true;
+  if (err.serverResponseCode === 'AUTHENTICATIONFAILED') return true;
+  if (err.responseCode === 534 || err.responseCode === 535) return true;
+  const text = [err.message, err.responseText, err.response].filter(Boolean).join(' ');
+  return /authentication failed|invalid credentials|login failed|\[AUTH\]|-ERR .*(password|login|auth)/i.test(text);
+}
+
 function friendlyError(err) {
   const msg = (err && err.message) || String(err);
-  if (/auth|login|credential|password|535|invalid/i.test(msg)) {
-    return 'Sign-in failed — check your email, password (many providers need an app password), and server settings. (' + msg + ')';
+  if (isAuthError(err) || /auth|login|credential|password|535|invalid/i.test(msg)) {
+    // imapflow's message is a generic "Command failed"; the server's reason
+    // lives in responseText.
+    const detail = (err && err.responseText) || (msg === 'Command failed' ? '' : msg);
+    return 'Sign-in failed — check your email, password (many providers need an app password), and server settings.' +
+      (detail ? ' (' + detail + ')' : '');
   }
   if (/ENOTFOUND|EAI_AGAIN/i.test(msg)) return 'Server not found — check the host name and your internet connection.';
   if (/ETIMEDOUT|ECONNREFUSED|ECONNRESET/i.test(msg)) return 'Could not reach the server — check host, port and security settings.';
@@ -31,7 +47,13 @@ function handle(channel, fn) {
       return { ok: true, data: await fn(event, ...args) };
     } catch (err) {
       console.error(`[${channel}]`, err);
-      return { ok: false, error: friendlyError(err) };
+      const result = { ok: false, error: friendlyError(err) };
+      // mail:* handlers take the account id first; tell the renderer which
+      // account needs its password re-entered.
+      if (channel.startsWith('mail:') && typeof args[0] === 'string' && isAuthError(err)) {
+        result.reauth = args[0];
+      }
+      return result;
     }
   });
 }
@@ -90,6 +112,17 @@ function registerIpcHandlers() {
   });
 
   handle('accounts:update', (_e, id, input) => store.updateAccount(id, input));
+
+  handle('accounts:reauth', async (_e, id, password) => {
+    // Re-validate an existing account with a new password before saving it.
+    const account = store.getAccount(id);
+    const credentials = { user: account.loginUser || account.email, password: String(password || '') };
+    if (!credentials.password) throw new Error('Enter your password.');
+    await backendFor(account).verify(account, credentials);
+    await smtp.verify(account, credentials);
+    await imap.dropClient(id);
+    return store.updateAccount(id, { password: credentials.password });
+  });
   handle('accounts:remove', (_e, id) => {
     store.removeAccount(id);
     cache.clearAccount(id);
