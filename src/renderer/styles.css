@@ -717,6 +717,8 @@ dialog::backdrop {
 
 #dlg-compose { width: min(720px, 94vw); }
 #dlg-confirm { width: min(400px, 92vw); }
+#dlg-reauth { width: min(420px, 92vw); }
+#reauth-email { color: var(--text-secondary); }
 
 dialog h2 { margin: 0 0 6px; font-size: 16px; font-weight: 700; }
 

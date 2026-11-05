@@ -25,6 +25,8 @@ const $ = (id) => document.getElementById(id);
 /* ---------- helpers ---------- */
 
 function toast(text, isError) {
+  // The sign-in-again dialog already explains the failure.
+  if (isError && $('dlg-reauth').open) return;
   const el = $('toast');
   el.textContent = text;
   el.classList.toggle('error', Boolean(isError));
@@ -720,6 +722,88 @@ $('form-account').addEventListener('submit', async (event) => {
     submit.textContent = 'Sign in';
   }
 });
+
+/* ---------- sign-in-again dialog ---------- */
+
+// Opened when the server rejects an account's stored password. One prompt
+// per account at a time; further failures for queued accounts are ignored.
+const dlgReauth = $('dlg-reauth');
+const reauthQueue = [];
+let reauthAccountId = null;
+
+function requestReauth(accountId) {
+  if (accountId === reauthAccountId || reauthQueue.includes(accountId)) return;
+  if (!state.accounts.some((a) => a.id === accountId)) return;
+  reauthQueue.push(accountId);
+  if (!reauthAccountId) showNextReauth();
+}
+
+function showNextReauth() {
+  reauthAccountId = reauthQueue.shift() || null;
+  if (!reauthAccountId) return;
+  const account = state.accounts.find((a) => a.id === reauthAccountId);
+  if (!account) { showNextReauth(); return; }
+  $('form-reauth').reset();
+  $('reauth-password').type = 'password';
+  $('reauth-error').hidden = true;
+  $('reauth-email').value = account.email;
+  $('reauth-text').textContent =
+    `LinuxMail couldn’t sign in to ${account.name || account.email}. ` +
+    'Your password may have changed or expired. Enter it again to keep getting mail.';
+  dlgReauth.showModal();
+  $('reauth-password').focus();
+}
+
+function closeReauth() {
+  dlgReauth.close();
+}
+
+dlgReauth.addEventListener('close', () => {
+  reauthAccountId = null;
+  showNextReauth();
+});
+
+$('reauth-cancel').addEventListener('click', closeReauth);
+
+$('reauth-show-pass').addEventListener('change', (e) => {
+  $('reauth-password').type = e.target.checked ? 'text' : 'password';
+});
+
+$('form-reauth').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const accountId = reauthAccountId;
+  const errEl = $('reauth-error');
+  errEl.hidden = true;
+  const password = $('reauth-password').value;
+  if (!password) {
+    errEl.textContent = 'Enter your password.';
+    errEl.hidden = false;
+    return;
+  }
+  const submit = $('reauth-submit');
+  submit.disabled = true;
+  submit.textContent = 'Checking…';
+  try {
+    const account = await mailApi.reauthAccount(accountId, password);
+    closeReauth();
+    toast(`Signed in as ${account.email}`);
+    await refreshAccounts();
+    if (state.mailboxes[accountId] && !state.mailboxes[accountId].length) {
+      // Folders failed to load earlier; fetch them now.
+      delete state.mailboxes[accountId];
+      renderSidebar();
+    }
+    if (state.current && state.current.accountId === accountId) await loadMessages();
+  } catch (err) {
+    errEl.textContent = err.message;
+    errEl.hidden = false;
+  } finally {
+    submit.disabled = false;
+    submit.textContent = 'Sign In';
+  }
+});
+
+mailApi.onAuthRequired((accountId) => requestReauth(accountId));
 
 /* ---------- compose dialog ---------- */
 
