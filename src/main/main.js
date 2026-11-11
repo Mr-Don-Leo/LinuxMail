@@ -40,6 +40,15 @@ function createWindow() {
       if (url.startsWith('http:') || url.startsWith('https:')) shell.openExternal(url);
     }
   });
+  // Backstop for links inside the message iframe that slip past the
+  // renderer's click handler: never let the frame navigate away.
+  mainWindow.webContents.on('will-frame-navigate', (event) => {
+    if (event.isMainFrame) return;
+    const { url } = event;
+    if (url.startsWith('about:') || url.startsWith('data:')) return;
+    event.preventDefault();
+    if (url.startsWith('http:') || url.startsWith('https:')) shell.openExternal(url);
+  });
 
   mainWindow.on('maximize', () => mainWindow.webContents.send('window:maximized', true));
   mainWindow.on('unmaximize', () => mainWindow.webContents.send('window:maximized', false));

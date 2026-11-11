@@ -44,5 +44,6 @@ contextBridge.exposeInMainWorld('mailApi', {
 
   windowControl: (action) => call('window:control', action),
   appAction: (action) => call('app:action', action),
+  openExternal: (url) => call('app:openExternal', url),
   onWindowMaximized: (cb) => ipcRenderer.on('window:maximized', (_e, value) => cb(value))
 });
