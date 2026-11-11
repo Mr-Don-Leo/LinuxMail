@@ -92,6 +92,15 @@ function registerIpcHandlers() {
     }
   });
 
+  // Opens with xdg-open, i.e. the user's preferred browser.
+  handle('app:openExternal', async (_e, url) => {
+    const parsed = new URL(String(url));
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      throw new Error('Only web links can be opened');
+    }
+    await shell.openExternal(parsed.href);
+  });
+
   handle('accounts:list', () => store.listAccounts());
   handle('accounts:detect', (_e, email) => detectProvider(email));
 

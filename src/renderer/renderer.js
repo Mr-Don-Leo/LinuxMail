@@ -517,12 +517,43 @@ function renderBody(msg) {
   } else {
     html = `<pre style="white-space:pre-wrap;font-family:system-ui,sans-serif;margin:0">${escapeHtml(msg.text)}</pre>`;
   }
-  // sandbox="" on the iframe blocks all scripts/forms/popups; the page CSP
-  // (inherited by the srcdoc document) additionally blocks remote images.
+  // The iframe sandbox blocks all scripts/forms/popups (allow-same-origin only
+  // lets this page attach the link handler below); the page CSP (inherited by
+  // the srcdoc document) additionally blocks remote images.
   frame.srcdoc = `<!doctype html><html><head><meta charset="utf-8">
     <style>body{margin:14px;font-family:system-ui,sans-serif;color:#111;word-break:break-word}</style>
     </head><body>${html}</body></html>`;
 }
+
+// Links and buttons in a message open in the user's preferred browser;
+// mailto: links open the in-app composer instead.
+$('msg-frame').addEventListener('load', () => {
+  const doc = $('msg-frame').contentDocument;
+  if (!doc) return;
+  doc.addEventListener('click', (event) => {
+    const link = event.target.closest && event.target.closest('a[href], area[href]');
+    if (!link) return;
+    const href = link.getAttribute('href').trim();
+    if (href.startsWith('#')) return;
+    event.preventDefault();
+    let url;
+    try {
+      url = new URL(href);
+    } catch {
+      return;
+    }
+    if (url.protocol === 'mailto:') {
+      const params = url.searchParams;
+      openCompose({
+        to: decodeURIComponent(url.pathname),
+        subject: params.get('subject') || '',
+        body: params.get('body') || ''
+      });
+    } else if (url.protocol === 'http:' || url.protocol === 'https:') {
+      mailApi.openExternal(url.href).catch((err) => toast(err.message, true));
+    }
+  });
+});
 
 /* ---------- reader actions ---------- */
 
